@@ -1,0 +1,4 @@
+syntax:glob
+*.aux
+*.log
+*.pdf
