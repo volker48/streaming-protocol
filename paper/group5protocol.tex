@@ -191,13 +191,13 @@ This paper defines a media streaming protocol that allows a properly implemented
 	\end{description}
 
 \section{DFA}
-\begin{tikzpicture}[->,align=center,>=stealth',shorten >=1pt,auto,node distance=3cm,bend angle=45,inner sep=2pt, every state/.style={draw=blue!50,very thick,fill=blue!20}]
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=3cm,bend angle=45,inner sep=2pt, every state/.style={draw=blue!50,very thick,fill=blue!20}]
 \node[initial,state] (waiting) {waiting};
-\node[state, node distance=5cm] (session req sent) [right of=waiting] {session \\ request \\ sent};
-\node[state] (session request receive) [below of=waiting]{session \\ request \\ receive};
+\node[state, node distance=5cm] (session req sent) [right of=waiting] {\begin{tabular}{c} session \\ request \\ sent \end{tabular}};
+\node[state] (session request receive) [below of=waiting]{\begin{tabular}{c}session \\ request \\ receive \end{tabular}};
 \node[state] (ready) [below of=session request receive]{ready};
-\node[state] (version sent) [below of=session request receive]{session \\ sent};
-\node[state] (session receive) [below of=session req sent]{session \\ rcv};
+\node[state] (version sent) [below of=session request receive]{\begin{tabular}{c}session \\ sent \end{tabular}};
+\node[state] (session receive) [below of=session req sent]{\begin{tabular}{c}session \\ rcv \end{tabular}};
 \node[state] (streaming) [below of=session receive]{streaming};
 
 
