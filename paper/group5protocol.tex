@@ -95,6 +95,32 @@ This paper defines a media streaming protocol that allows a properly implemented
 		\hline
 	\end{tabular}
 	\end{description}
+\subsubsection{ThrottleMessage}
+	\begin{description}
+	\item[Description] \hfill \\
+		This message is sent from the client to the server to control the rate of data being sent to the client. It can be used to increase or decrease rate of transmission.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | c | c | }
+		\hline
+		1 byte & 1 byte & 4 bytes \\
+		\hline
+		Message ID & Session ID & Rate \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+					\newline Always set to 6 for this message. \\
+		\hline
+		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+		\hline
+        Rate & float & Indicates the client's desired rate of transmission in bytes per second. \\
+        \hline
+	\end{tabular}
+	\end{description}
 
 \subsection{Server-to-Client Messages}
 \subsubsection{SessionMessage}
@@ -253,5 +279,8 @@ This protocol uses a CHAP-like handshaking protocol for authentication of client
 
 \section{Reliability}
 Due to the real-time nature of the protocol, it does not attempt to retransmit any lost packets. It does, however, provide sequence number on all data messages in order to ignore any packets which have reached the client after a more recently sent packet. In addition to this, each data message contains a CRC for basic error checking. When an error is detected, the packet is simply dropped.
+
+\section{Quality of Service}
+Streaming media transmission requires careful monitoring of traffic to maintain acceptable levels of loss and to avoid network congestion. These goals are achieved through the ThrottleMessage. The client sends a ThrottleMessage to inform the server that it would like to change the server's rate of transmission to that client. If the network is under a heavy load, the client will observe that packets have been lost in transit by examining sequence numbers. When this occurs, the client will request that the server decrease its current transmission rate to avoid packet loss for other services across the network. This is necessary because UDP will not perform this operation on its own like TCP would. If the client wishes to increase the rate of transmission it may do this as well, but the server is free to ignore any request that is too high.
 
 \end{document}
