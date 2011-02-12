@@ -187,7 +187,30 @@ This paper defines a media streaming protocol that allows a properly implemented
 	\begin{description}
 	\item[Description] \hfill \\
 		These messages are sent while the protocol is in the streaming state. They contain the 
-		actual data that is being streamed.
+		actual data that is being streamed. The message consists of a message ID identifying it as a data message, a session ID identifying the session, a four-byte data length field, and a variable $n$-byte data chunk.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | c | c | c | }
+		\hline
+		1 byte & 1 byte & 4 bytes & $n$ bytes \\
+		\hline
+		Message ID & Session ID & Data Length & Encoded Data \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+					\newline Always set to 5 for this message. \\
+		\hline
+		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+		\hline
+		Data Length & int & Contains the value of $n$. \\
+		\hline
+        Encoded Data & variable & Encoded stream data. \\
+        \hline
+	\end{tabular}
 	\end{description}
 
 \section{DFA}
