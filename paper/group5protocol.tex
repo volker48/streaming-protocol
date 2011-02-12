@@ -193,11 +193,11 @@ This paper defines a media streaming protocol that allows a properly implemented
 		These messages are sent while the protocol is in the streaming state. They contain the 
 		actual data that is being streamed. The message consists of a message ID identifying it as a data message, a session ID identifying the session, a four-byte data length field, and a variable $n$-byte data chunk.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | c | }
+	\begin{tabular}{ | c | c | c | c | c | c | }
 		\hline
-		1 byte & 1 byte & 4 bytes & $n$ bytes \\
+		1 byte & 1 byte & 1 byte & 4 bytes & $n$ bytes & 1 byte \\
 		\hline
-		Message ID & Session ID & Data Length & Encoded Data \\
+		Message ID & Session ID & Sequence Number & Data Length & Encoded Data & CRC \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
@@ -209,10 +209,14 @@ This paper defines a media streaming protocol that allows a properly implemented
 					\newline Always set to 5 for this message. \\
 		\hline
 		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+        \hline
+        Sequence Number & byte & Sequence number for this message. \\
 		\hline
 		Data Length & int & Contains the value of $n$. \\
 		\hline
         Encoded Data & variable & Encoded stream data. \\
+        \hline
+        CRC & byte & Cyclic redundancy check for the packet. \\
         \hline
 	\end{tabular}
 	\end{description}
@@ -246,5 +250,8 @@ Protocol version information is included in connection messages so that the prot
 
 \section{Security}
 This protocol uses a CHAP-like handshaking protocol for authentication of clients.  After the connection has been established, the server sends a challenge message to the client.  Both the client and server pass a password through a pre-determined hash function, and the server checks the results and informs the client of success or failure.
+
+\section{Reliability}
+Due to the real-time nature of the protocol, it does not attempt to retransmit any lost packets. It does, however, provide sequence number on all data messages in order to ignore any packets which have reached the client after a more recently sent packet. In addition to this, each data message contains a CRC for basic error checking. When an error is detected, the packet is simply dropped.
 
 \end{document}
