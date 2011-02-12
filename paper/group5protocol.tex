@@ -104,11 +104,11 @@ This paper defines a media streaming protocol that allows a properly implemented
 		the protocol that will be used during the streaming session. It also contains the session id 
 		that will be used in further communication with the server.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | }
+	\begin{tabular}{ | c | c | c | c | c | }
 		\hline
-		1 byte & 1 byte & 1 byte \\
+		1 byte & 1 byte & 1 byte & 1 byte & $n$-bytes \\
 		\hline
-		Message ID & Session ID &  Version Number \\
+		Message ID & Session ID &  Version Number & Type Length & Stream Type \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
@@ -123,6 +123,10 @@ This paper defines a media streaming protocol that allows a properly implemented
 		Version Number & byte & Identifies the protocol version to be used in this connection.
 						\newline 1 = Version 1.0 \\
 		\hline
+        Type Length & byte & Contains the value of $n$, the length of the Stream Type field. \\
+        \hline
+        Stream Type & variable & An ASCII-encoded string describing the encoding format and data type of the stream. \\
+        \hline
 	\end{tabular}
 	\end{description}
 \subsubsection{ChallengeMessage}
@@ -238,7 +242,7 @@ This paper defines a media streaming protocol that allows a properly implemented
 \end{tikzpicture}
 
 \section{Extensibility}
-Protocol version information is included in connection messages so that the protocol version used by both sides can be established during the configuration phase.  This allows future improvements to the protocol to be implemented without rendering existing client applications unusable.
+Protocol version information is included in connection messages so that the protocol version used by both sides can be established during the configuration phase.  This allows future improvements to the protocol to be implemented without rendering existing client applications unusable. In addition to this, the type of media and encoding that the stream uses are sent to the client as an ASCII-encoded string. This allows clients and servers to implement additional encodings as they are developed without updates to the protocol.
 
 \section{Security}
 This protocol uses a CHAP-like handshaking protocol for authentication of clients.  After the connection has been established, the server sends a challenge message to the client.  Both the client and server pass a password through a pre-determined hash function, and the server checks the results and informs the client of success or failure.
