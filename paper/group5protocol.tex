@@ -1,5 +1,6 @@
 \documentclass[12pt,letterpaper,titlepage]{article}
 \usepackage[latin1]{inputenc}
+\usepackage{fullpage}
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{amssymb}
@@ -253,19 +254,21 @@ This paper defines a media streaming protocol that allows a properly implemented
 \node[state, node distance=5cm] (session req sent) [right of=waiting] {\begin{tabular}{c} session \\ request \\ sent \end{tabular}};
 \node[state] (session request receive) [below of=waiting]{\begin{tabular}{c}session \\ request \\ receive \end{tabular}};
 \node[state] (ready) [below of=session request receive]{ready};
-\node[state] (version sent) [below of=session request receive]{\begin{tabular}{c}session \\ sent \end{tabular}};
-\node[state] (session receive) [below of=session req sent]{\begin{tabular}{c}session \\ rcv \end{tabular}};
-\node[state] (streaming) [below of=session receive]{streaming};
+\node[state] (session sent) [below of=session request receive]{\begin{tabular}{c}session \\ sent \end{tabular}};
+\node[state] (wait for challenge) [below of=session req sent]{\begin{tabular}{c}await \\ challenge \end{tabular}};
+\node[state](sent challenge) [below of=session sent]{\begin{tabular}{c}sent \\ challenge \end{tabular}};
+\node[state] (streaming) [below of=wait for challenge]{streaming};
 
 
-\path (waiting) 		edge				node 			{snd session req} (session req sent)
+\path (waiting) 				edge				node 			{snd session req} (session req sent)
 	   					edge				node[swap] 		{rcv session req} (session request receive)
-	(session req sent) 	edge [bend left]	node[swap] 		{timeout} 	(waiting)
-						edge				node[swap]		{session} (session receive)
-	(session request receive)		edge				node[swap]		{snd session}	(version sent)
-	(session receive)		edge				node			{stream} (streaming)
+	(session req sent) 		edge [bend left]	node[swap] 		{timeout} 	(waiting)
+						edge				node[swap]		{session} (wait for challenge)
+	(session request receive)	edge				node[swap]		{snd session}	(session sent)
+	(wait for challenge)		edge				node			{stream} (streaming)
 						edge [bend right]	node[swap]		{timeout} (session req sent)
-	(version sent)		edge				node			{stream} (streaming)
+	(session sent)			edge				node			{stream} (streaming)
+						edge				node	[swap]	{challenge} (sent challenge)
 					
 	;
 
