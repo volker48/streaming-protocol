@@ -249,27 +249,24 @@ This paper defines a media streaming protocol that allows a properly implemented
 	\end{description}
 
 \section{DFA}
-\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,node distance=3cm,bend angle=45,inner sep=2pt, every state/.style={draw=blue!50,very thick,fill=blue!20}]
-\node[initial,state] (waiting) {waiting};
-\node[state, node distance=5cm] (session req sent) [right of=waiting] {\begin{tabular}{c} session \\ request \\ sent \end{tabular}};
-\node[state] (session request receive) [below of=waiting]{\begin{tabular}{c}session \\ request \\ receive \end{tabular}};
-\node[state] (ready) [below of=session request receive]{ready};
-\node[state] (session sent) [below of=session request receive]{\begin{tabular}{c}session \\ sent \end{tabular}};
-\node[state] (wait for challenge) [below of=session req sent]{\begin{tabular}{c}await \\ challenge \end{tabular}};
-\node[state](sent challenge) [below of=session sent]{\begin{tabular}{c}sent \\ challenge \end{tabular}};
-\node[state] (streaming) [below of=wait for challenge]{streaming};
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,bend angle=75,inner sep=0, every state/.style={draw=blue!50,very thick,fill=blue!20, font=\footnotesize}]
 
+\foreach \name/\text/\angle in {1/disconnected/180, 2/connecting/120, 3/connected/60, 4/authenticating/0, 5/authenticated/300, 6/streaming/240}
+\node[state,xshift=10cm,yshift=2cm](\name) at (\angle:5cm) {\text};
 
-\path (waiting) 				edge				node 			{snd session req} (session req sent)
-	   					edge				node[swap] 		{rcv session req} (session request receive)
-	(session req sent) 		edge [bend left]	node[swap] 		{timeout} 	(waiting)
-						edge				node[swap]		{session} (wait for challenge)
-	(session request receive)	edge				node[swap]		{snd session}	(session sent)
-	(wait for challenge)		edge				node			{stream} (streaming)
-						edge [bend right]	node[swap]		{timeout} (session req sent)
-	(session sent)			edge				node			{stream} (streaming)
-						edge				node	[swap]	{challenge} (sent challenge)
-					
+\path 
+	(1) edge				node {session req} 	(2)
+	(2) edge				node {session msg} 	(3)
+	      edge [bend right]		node[swap] {timeout} 		(1)	
+	(3) edge				node {chlg}		(4)
+	      edge				node {timeout}		(1)	
+	(4) edge 				node {chlg sucess}	(5)
+	      edge [loop right]		node {chlg fail}          (4)
+	      edge 				node {auth err}          (1)
+	(5) edge				node {stream}		(6)
+	(6) edge				node {disc}		(1)
+	      edge [loop below]	node {throttle}		(6)	
+	
 	;
 
 \end{tikzpicture}
