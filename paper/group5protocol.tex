@@ -214,6 +214,35 @@ This paper defines a media streaming protocol that allows a properly implemented
 		\hline
 	\end{tabular}
 	\end{description}
+\subsubsection{AuthenticationErrorMessage}
+	\begin{description}
+	\item[Description] \hfill \\
+		This message is sent from the server to the client to notify the client of an error in 
+		completing the authentication process. This message contains an error code in order to 
+		properly inform the client of the nature of the error. This message transitions the protocol
+		state from Authenticating to Disconnected.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | c | c | }
+		\hline
+		1 byte & 1 byte & 4 bytes \\
+		\hline
+		Message ID & Session ID & Error Code \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+					\newline Always set to 9 for this message. \\
+		\hline
+		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+		\hline
+		Error Code & int & Contains the code for the error that occurred during the authentication process. \\
+		\hline
+	\end{tabular}
+	\end{description}	
 \subsubsection{StreamMessage}
 	\begin{description}
 	\item[Description] \hfill \\
