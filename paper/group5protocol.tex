@@ -114,7 +114,7 @@ This paper defines a media streaming protocol that allows a properly implemented
 		Field Name & Data Type & Definition \\
 		\hline
 		Message ID & byte & Contains the Message ID number. 
-					\newline Always set to 6 for this message. \\
+					\newline Always set to 7 for this message. \\
 		\hline
 		Session ID & byte & Contains the Session ID number pertaining to this message. \\
 		\hline
@@ -278,7 +278,7 @@ This paper defines a media streaming protocol that allows a properly implemented
 	\end{description}
 
 \section{DFA}
-\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,bend angle=75,inner sep=0, every state/.style={draw=blue!50,very thick,fill=blue!20, font=\footnotesize}]
+\begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,bend angle=75,inner sep=1pt, every state/.style={draw=blue!50,very thick,fill=blue!20, font=\footnotesize}]
 
 \foreach \name/\text/\angle in {1/disconnected/180, 2/connecting/120, 3/connected/60, 4/authenticating/0, 5/authenticated/300, 6/streaming/240}
 \node[state,xshift=10cm,yshift=2cm](\name) at (\angle:5cm) {\text};
@@ -294,11 +294,22 @@ This paper defines a media streaming protocol that allows a properly implemented
 	      edge 				node {auth err}          (1)
 	(5) edge				node {stream}		(6)
 	(6) edge				node {disc}		(1)
-	      edge [loop below]	node {throttle}		(6)	
+	      edge [loop below]	node {throttle}		(6)
+	      edge [bend left]		node {stream err}	(1)	      	
 	
 	;
 
 \end{tikzpicture}
+
+%session request id = 1
+% ChallengeResponseMessage = 4
+% Disconnect = 6
+% Throttle = 7
+%SessionMessage = 2
+%ChallengeMessage = 3
+% ChallengeResult = 5
+%auth err = 9
+%stream = 5
 
 \section{Extensibility}
 Protocol version information is included in connection messages so that the protocol version used by both sides can be established during the configuration phase.  This allows future improvements to the protocol to be implemented without rendering existing client applications unusable. In addition to this, the type of media and encoding that the stream uses are sent to the client as an ASCII-encoded string. This allows clients and servers to implement additional encodings as they are developed without updates to the protocol.
