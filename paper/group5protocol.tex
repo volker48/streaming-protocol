@@ -10,7 +10,12 @@
 \author{Dimitri Demergis \\ Jason Lee \\ Stephen Lombardi \\ Marcus McCurdy}
 \title{CS544 Group 5 Protocol}
 \begin{document}
+
 \maketitle
+
+\tableofcontents
+
+\pagebreak
 
 \section{Introduction}
 This paper defines a media streaming protocol that allows a properly implemented server to stream media to connected clients. Clients are able the join at any time during the streaming process and may be required to authenticate themselves to the server. The protocol is designed to deal with arbitrary streaming data types, including live or prerecorded video and/or audio.
@@ -273,6 +278,33 @@ This paper defines a media streaming protocol that allows a properly implemented
         \hline
         CRC & byte & Cyclic redundancy check for the packet. \\
         \hline
+	\end{tabular}
+	\end{description}
+	
+	\subsubsection{StreamErrorMessage}
+	\begin{description}
+	\item[Description] \hfill \\
+		This message may be sent while the protocol is in the streaming state. It signifies an unrecoverable
+		error during the streaming process. It causes the protocol to transition from the streaming to
+		disconnected state.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | c | }
+		\hline
+		1 byte & 1 byte  \\
+		\hline
+		Message ID & Session ID  \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+		\newline Always set to 10 for this message. \\
+		\hline
+		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+	        \hline
 	\end{tabular}
 	\end{description}
 
