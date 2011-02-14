@@ -356,5 +356,8 @@ Due to the real-time nature of the protocol, it does not attempt to retransmit a
 \section{Quality of Service}
 Streaming media transmission requires careful monitoring of traffic to maintain acceptable levels of loss and to avoid network congestion. These goals are achieved through the ThrottleMessage. The client sends a ThrottleMessage to inform the server that it would like to change the server's rate of transmission to that client. If the network is under a heavy load, the client will observe that packets have been lost in transit by examining sequence numbers. When this occurs, the client will request that the server decrease its current transmission rate to avoid packet loss for other services across the network. This is necessary because UDP will not perform this operation on its own like TCP would. If the client wishes to increase the rate of transmission it may do this as well, but the server is free to ignore any request that is too high.
 
+\section{Group Contribution}
+Everyone in the group contributed to this writeup. Each member contributed one or more states and messages as well as writing sections and subsections of this document. Everyone provided valuable feedback and ideas during this initial design phase of the protocol.
+
 
 \end{document}
