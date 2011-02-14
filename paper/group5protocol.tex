@@ -288,11 +288,11 @@ This paper defines a media streaming protocol that allows a properly implemented
 		error during the streaming process. It causes the protocol to transition from the streaming to
 		disconnected state.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | }
+	\begin{tabular}{ | c | c | c | }
 		\hline
-		1 byte & 1 byte  \\
+		1 byte & 1 byte & 4 bytes \\
 		\hline
-		Message ID & Session ID  \\
+		Message ID & Session ID & Error Code \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
@@ -304,7 +304,9 @@ This paper defines a media streaming protocol that allows a properly implemented
 		\newline Always set to 10 for this message. \\
 		\hline
 		Session ID & byte & Contains the Session ID number pertaining to this message. \\
-	        \hline
+	    \hline
+		Error Code & int & Contains the code for the error that occurred during streaming. \\
+		\hline
 	\end{tabular}
 	\end{description}
 
