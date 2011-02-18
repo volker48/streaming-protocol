@@ -4,3 +4,4 @@ syntax:glob
 *.pdf
 *.gz
 *.toc
+.DS_Store
