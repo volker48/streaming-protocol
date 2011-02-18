@@ -1,7 +1,7 @@
 package edu.drexel.group5.protocol;
 
 import com.google.common.base.Preconditions;
-import com.sun.org.apache.xml.internal.dtm.ref.DTMDefaultBaseIterators.PrecedingIterator;
+import java.net.DatagramPacket;
 import java.net.Socket;
 
 /**
@@ -10,12 +10,17 @@ import java.net.Socket;
  */
 public class ConnectionHandler implements Runnable {
 
-	private final Socket connection;
+	private final DatagramPacket packet;
 
-	public ConnectionHandler(Socket connection) {
-		Preconditions.checkNotNull(connection);
-		Preconditions.checkArgument(connection.isConnected());
-		this.connection = connection;
+	/**
+	 *
+	 * @param packet a DatagramPacket that represents a SESSION_REQUEST message.
+	 * The data in this packet will be used for future communication with the
+	 * client.
+	 */
+	public ConnectionHandler(DatagramPacket packet) {
+		Preconditions.checkNotNull(packet);
+		this.packet = packet;
 	}
 
 	public void run() {
