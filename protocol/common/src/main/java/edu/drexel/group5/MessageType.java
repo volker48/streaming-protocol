@@ -9,7 +9,7 @@ public enum MessageType {
 	SESSION_REQUEST((byte) 1),
 	SESSION((byte) 2),
 	CHALLENGE((byte) 3),
-	CHALLENEGE_RESPONSE((byte) 4),
+	CHALLENGE_RESPONSE((byte) 4),
 	CHALLENGE_RESULT((byte) 5),
 	AUTHENTICATION_ERROR((byte) 9),
 	STREAM((byte) 5),
@@ -26,7 +26,7 @@ public enum MessageType {
 		return messageId;
 	}
 
-	public MessageType getMessageTypeFromId(byte messageId) {
+	public static MessageType getMessageTypeFromId(byte messageId) {
 		for (MessageType value : values()) {
 			if (messageId == value.messageId) {
 				return value;

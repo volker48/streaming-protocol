@@ -5,3 +5,4 @@ syntax:glob
 *.gz
 *.toc
 .DS_Store
+target/
