@@ -51,6 +51,7 @@ public class StreamSession implements Runnable {
 	@Override
 	public void run() {
 		while (!Thread.currentThread().isInterrupted()) {
+			//need to setup and actually start sending the stream messages
 		}
 	}
 

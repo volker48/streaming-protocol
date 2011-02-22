@@ -6,7 +6,6 @@
 package edu.drexel.group5;
 
 import java.io.PrintStream;
-import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import org.junit.Test;
 
@@ -31,7 +30,7 @@ public class PacketFactoryTest {
 		System.out.println("hash2: " + hash2);
 		System.out.println("hash2.length = " + hash2.length);
 		PrintStream ps = new PrintStream(System.out);
-		System.out.println("printstream hahs ourput");
+		System.out.println("printstream has output");
 		ps.write(hash);
 		System.out.println("Hash2:");
 		ps.write(hash2);

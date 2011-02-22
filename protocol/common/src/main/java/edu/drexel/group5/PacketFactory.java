@@ -7,8 +7,11 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 
 /**
  *
@@ -59,9 +62,29 @@ public class PacketFactory {
 		out.writeByte(version);
 		out.writeByte(formatBytes.length);
 		out.write(formatBytes);
+		out.flush();
 		final byte[] data = bytesOut.toByteArray();
 		out.close();
 		return new DatagramPacket(data, data.length, destination);
+	}
+
+	public DatagramPacket createChallenge(byte sessionId, int random) throws NoSuchAlgorithmException, IOException {
+		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
+		final ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
+		objectOut.write(random);
+		objectOut.flush();
+		byte[] toHash = bytesOut.toByteArray();
+		MessageDigest md = MessageDigest.getInstance("SHA-1");
+		byte[] hash = md.digest(toHash);
+		bytesOut.reset();
+		objectOut.write(MessageType.CHALLENGE.getMessageId());
+		objectOut.writeByte(sessionId);
+		objectOut.write(hash);
+		objectOut.flush();
+		byte[] data = bytesOut.toByteArray();
+		DatagramPacket packet = new DatagramPacket(data, data.length, destination);
+		objectOut.close();
+		return packet;
 	}
 
 
@@ -71,6 +94,7 @@ public class PacketFactory {
 		output.writeByte(MessageType.CHALLENGE_RESPONSE.getMessageId());
 		output.writeByte(sessionId);
 		output.writeInt(response);
+		output.flush();
 		final byte[] data = bytes.toByteArray();
 		output.close();
 		return new DatagramPacket(data, data.length, destination);
