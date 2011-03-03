@@ -88,12 +88,22 @@ public class PacketFactory {
 	}
 
 
-	public DatagramPacket createChallengeResponse(byte sessionId, int response) throws IOException {
+	public DatagramPacket createChallengeResponse(byte sessionId, int challengeValue, String password) throws IOException {
 		final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 		final ObjectOutputStream output = new ObjectOutputStream(bytes);
+        output.writeInt(challengeValue);
+        output.writeBytes(password);
+        output.flush();
+        MessageDigest md = null;
+        try {
+		    md = MessageDigest.getInstance("SHA-1");
+        } catch(NoSuchAlgorithmException ex) {
+            throw new RuntimeException("NoSuchAlgorithm: SHA-1", ex);
+        }
+		byte[] hash = md.digest(bytes.toByteArray());
 		output.writeByte(MessageType.CHALLENGE_RESPONSE.getMessageId());
 		output.writeByte(sessionId);
-		output.writeInt(response);
+		output.write(hash);
 		output.flush();
 		final byte[] data = bytes.toByteArray();
 		output.close();
