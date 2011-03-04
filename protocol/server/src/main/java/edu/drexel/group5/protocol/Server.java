@@ -4,6 +4,7 @@ import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.util.UUID;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -30,12 +31,12 @@ public class Server extends Thread {
 		logger.log(Level.INFO, "Stream Server starting on port: {0} ...", port);
 		this.packetQueue = new LinkedBlockingQueue<DatagramPacket>();
 		this.port = port;
-		this.packetHandler = new PacketHandler(packetQueue);
 		try {
 			this.socket = new DatagramSocket(port);
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not create a ServerSocket on port: " + port + " please start the server again with a different unused port", ex);
 		}
+		this.packetHandler = new PacketHandler(packetQueue, socket);
 	}
 
 	@Override

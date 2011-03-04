@@ -6,20 +6,22 @@ import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.net.SocketException;
-import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
  * @author Marcus McCurdy <marcus@drexel.edu>
  */
 public class PacketFactory {
-	
-	private InetSocketAddress destination;
+
+	private final SocketAddress destination;
+	private final MessageDigest messageDigest;
 
 	/**
 	 * Constructor that will set all packets created by this factory to the
@@ -28,19 +30,21 @@ public class PacketFactory {
 	 * @param destinationAddress the destination address.
 	 */
 	public PacketFactory(int destinationPort, InetAddress destinationAddress) {
-		destination = new InetSocketAddress(destinationAddress, destinationPort);
+		this(new InetSocketAddress(destinationAddress, destinationPort));
 	}
 
-	public PacketFactory(InetSocketAddress destination) {
+	public PacketFactory(SocketAddress destination) {
 		this.destination = destination;
+		try {
+			this.messageDigest = MessageDigest.getInstance("SHA-1");
+		} catch (NoSuchAlgorithmException ex) {
+			throw new RuntimeException("SHA-1 is not available on the system!", ex);
+		}
 	}
-
-
 
 	public DatagramPacket createSessionRequest(byte protocolVersion) throws SocketException {
 		final byte[] data = new byte[]{MessageType.SESSION_REQUEST.getMessageId(), protocolVersion};
-		final DatagramPacket packet = new DatagramPacket(data, data.length, destination);
-		return packet;
+		return new DatagramPacket(data, data.length, destination);
 	}
 
 	/**
@@ -48,9 +52,10 @@ public class PacketFactory {
 	 * @param sessionId the id of the session.
 	 * @param version the protocol version.
 	 * @param format the String name of the stream format. Must be less than 256 characters.
+	 * @param challengeValue the random int that will be hashed with the shared secret by the client.
 	 * @return
 	 */
-	public DatagramPacket createSessionMessage(byte sessionId, byte version, String format) throws IOException {
+	public DatagramPacket createSessionMessage(byte sessionId, byte version, String format, int challengeValue) throws IOException {
 		if (format.length() > 256) {
 			throw new IllegalArgumentException("Format string must be less than 256 characters!");
 		}
@@ -62,56 +67,65 @@ public class PacketFactory {
 		out.writeByte(version);
 		out.writeByte(formatBytes.length);
 		out.write(formatBytes);
+		out.writeInt(challengeValue);
 		out.flush();
 		final byte[] data = bytesOut.toByteArray();
 		out.close();
 		return new DatagramPacket(data, data.length, destination);
 	}
 
-	public DatagramPacket createChallenge(byte sessionId, int random) throws NoSuchAlgorithmException, IOException {
-		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-		final ObjectOutputStream objectOut = new ObjectOutputStream(bytesOut);
-		objectOut.write(random);
-		objectOut.flush();
-		byte[] toHash = bytesOut.toByteArray();
-		MessageDigest md = MessageDigest.getInstance("SHA-1");
-		byte[] hash = md.digest(toHash);
-		bytesOut.reset();
-		objectOut.write(MessageType.CHALLENGE.getMessageId());
-		objectOut.writeByte(sessionId);
-		objectOut.write(hash);
-		objectOut.flush();
-		byte[] data = bytesOut.toByteArray();
-		DatagramPacket packet = new DatagramPacket(data, data.length, destination);
-		objectOut.close();
-		return packet;
-	}
-
-
-	public DatagramPacket createChallengeResponse(byte sessionId, int challengeValue, String password) throws IOException {
-		final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-		final ObjectOutputStream output = new ObjectOutputStream(bytes);
-        output.writeInt(challengeValue);
-        output.writeBytes(password);
-        output.flush();
-        MessageDigest md = null;
-        try {
-		    md = MessageDigest.getInstance("SHA-1");
-        } catch(NoSuchAlgorithmException ex) {
-            throw new RuntimeException("NoSuchAlgorithm: SHA-1", ex);
-        }
-		byte[] hash = md.digest(bytes.toByteArray());
-		output.writeByte(MessageType.CHALLENGE_RESPONSE.getMessageId());
-		output.writeByte(sessionId);
-		output.write(hash);
+	/**
+	 * Creates the challenge response message the client sends back to the sever
+	 * after receiving the session message containing the challengeValue
+	 * @param sessionId
+	 * @param challengeValue
+	 * @param secret
+	 * @return a DatagramPacket that represents a ChallengeResponse
+	 * @throws IOException
+	 */
+	public DatagramPacket createChallengeResponse(byte sessionId, int challengeValue, String secret) throws IOException {
+		final ByteArrayOutputStream output = new ByteArrayOutputStream();
+		output.write(MessageType.CHALLENGE_RESPONSE.getMessageId());
+		output.write(sessionId);
+		messageDigest.update(intToByteArray(challengeValue));
+		messageDigest.update(secret.getBytes("US-ASCII"));
+		output.write(messageDigest.digest());
 		output.flush();
-		final byte[] data = bytes.toByteArray();
+		final byte[] data = output.toByteArray();
 		output.close();
 		return new DatagramPacket(data, data.length, destination);
 	}
 
+	/**
+	 * Utility method to convert an integer to a byte array.
+	 * @param value the int to convert.
+	 * @return a byte array of size 4.
+	 */
+	private byte[] intToByteArray(int value) {
+		return new byte[]{
+					(byte) (value >>> 24),
+					(byte) (value >>> 16),
+					(byte) (value >>> 8),
+					(byte) value};
+	}
+
+	/**
+	 * Creates the disconnect message.
+	 * @param sessionId the byte id of the session being disconnected
+	 * @return a DatagramPacket representing a disconnect message.
+	 * @throws SocketException
+	 */
 	public DatagramPacket createDisconnectMessage(byte sessionId) throws SocketException {
 		final byte[] data = new byte[]{MessageType.DISCONNECT.getMessageId(), sessionId};
+		return new DatagramPacket(data, data.length, destination);
+	}
+
+	public DatagramPacket createAuthenticationError(byte sessionId, int errorCode) throws SocketException, IOException {
+		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		baos.write(sessionId);
+		baos.write(intToByteArray(errorCode), 0, 4);
+		final byte[] data = baos.toByteArray();
+		baos.close();
 		return new DatagramPacket(data, data.length, destination);
 	}
 }
