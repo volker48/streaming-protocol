@@ -3,9 +3,12 @@ package edu.drexel.group5.protocol;
 import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import edu.drexel.group5.PacketFactory;
+
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -23,7 +26,7 @@ public class Client extends Thread {
 	private static final Logger logger = Logger.getLogger(Client.class.getName());
 	private static final int BUFFER_LENGTH = 128; //TODO: This can be lowered I think the largest client-to-server message is pretty small.
     private static final byte CLIENT_VERSION = 1;
-
+	private ObjectInputStream objectIn;
 	private final InetAddress serverAddress;
 	private final int serverPort;
     private final String password;
@@ -66,6 +69,7 @@ public class Client extends Thread {
                 streamType = new String(typestringbyte);
 
                 if(serverVersion != CLIENT_VERSION) {
+                    logger.log(Level.WARNING, "Version mismatch: Server = " + serverVersion + " Client = " + CLIENT_VERSION);                	
 			        throw new RuntimeException("Server version does not match");
                 }
 
@@ -222,7 +226,8 @@ public class Client extends Thread {
 				logger.log(Level.INFO, "Rcved packet: {0}", packet);
 
                 // handle the received message
-				MessageType message = MessageType.getMessageTypeFromId(buffer[0]);
+				objectIn = new ObjectInputStream(new BufferedInputStream(new ByteArrayInputStream(packet.getData())));
+				MessageType message = MessageType.getMessageTypeFromId(objectIn.readByte());
                 switch(message) {
 					case SESSION:
                         acceptSession(buffer);

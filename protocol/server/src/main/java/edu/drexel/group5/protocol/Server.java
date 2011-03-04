@@ -31,6 +31,7 @@ public class Server extends Thread {
 		this.packetQueue = new LinkedBlockingQueue<DatagramPacket>();
 		this.port = port;
 		this.packetHandler = new PacketHandler(packetQueue);
+		this.packetHandler.start();
 		try {
 			this.socket = new DatagramSocket(port);
 		} catch (IOException ex) {

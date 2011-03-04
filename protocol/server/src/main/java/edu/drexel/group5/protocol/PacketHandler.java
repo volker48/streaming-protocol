@@ -21,6 +21,7 @@ public class PacketHandler extends Thread {
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
 	private final Map<String, LinkedBlockingQueue<DatagramPacket>> sessions;
 	private final Executor executor = Executors.newCachedThreadPool();
+	private int numSessions = 0;
 
 	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue) {
 		super("Packet Handler");
@@ -44,7 +45,7 @@ public class PacketHandler extends Thread {
 						}
 						final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
 						sessions.put(ip, sessionsQueue);
-						final StreamSession session = new StreamSession(packet, sessionsQueue);
+						final StreamSession session = new StreamSession(packet, sessionsQueue, numSessions++);
 						executor.execute(session);
 						break;
 					case THROTTLE:
