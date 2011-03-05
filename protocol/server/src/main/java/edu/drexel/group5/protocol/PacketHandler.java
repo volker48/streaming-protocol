@@ -41,16 +41,13 @@ public class PacketHandler extends Thread {
 				MessageType message = MessageType.getMessageTypeFromId(data[0]);
 				String ip = packet.getAddress().getHostAddress();
 				switch (message) {
+					//Setup a new StreamSession to handle the request and subsequent messages
 					case SESSION_REQUEST:
 						if (sessions.containsKey(ip)) {
 							logger.log(Level.WARNING, "Received a SessionRequest for an existing session! Packet Info: {0}", packet);
 							continue;
 						}
-						final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
-						sessionsQueue.add(packet);
-						sessions.put(ip, sessionsQueue);
-						final StreamSession session = new StreamSession(sessionsQueue, socket, sessionId);
-						executor.execute(session);
+						setupNewStreamSession(ip, packet);
 						break;
 					case THROTTLE:
 					case CHALLENGE_RESPONSE:
@@ -58,6 +55,7 @@ public class PacketHandler extends Thread {
 						//fall through is intentional
 						if (!sessions.containsKey(ip)) {
 							logger.log(Level.WARNING, "Received MessageType: {0}, but no session exists for IP: {1}", new Object[]{message, ip});
+							continue;
 						}
 						sessions.get(ip).put(packet);
 						break;
@@ -69,5 +67,13 @@ public class PacketHandler extends Thread {
 				logger.log(Level.INFO, "PacketHandler interrupt received shutting down...");
 			}
 		}
+	}
+
+	private void setupNewStreamSession(String ip, DatagramPacket packet) {
+		final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
+		sessionsQueue.add(packet);
+		sessions.put(ip, sessionsQueue);
+		final StreamSession session = new StreamSession(sessionsQueue, socket, sessionId);
+		executor.execute(session);
 	}
 }
