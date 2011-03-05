@@ -30,13 +30,13 @@ public class Server extends Thread {
 		logger.log(Level.INFO, "Stream Server starting on port: {0} ...", port);
 		this.packetQueue = new LinkedBlockingQueue<DatagramPacket>();
 		this.port = port;
-		this.packetHandler = new PacketHandler(packetQueue);
-		this.packetHandler.start();
 		try {
 			this.socket = new DatagramSocket(port);
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not create a ServerSocket on port: " + port + " please start the server again with a different unused port", ex);
 		}
+		this.packetHandler = new PacketHandler(packetQueue, socket);
+		this.packetHandler.start();
 	}
 
 	@Override
@@ -63,7 +63,7 @@ public class Server extends Thread {
 		} catch (InterruptedException ex) {
 			logger.log(Level.SEVERE, "The main thread was interrupted!", ex);
 		}
-		logger.log(Level.INFO, "Server shutting down goodbye.");
+		logger.log(Level.INFO, "Server shutting down, goodbye.");
 		System.exit(0);
 	}
 }

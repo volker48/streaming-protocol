@@ -2,6 +2,7 @@ package edu.drexel.group5.protocol;
 
 import edu.drexel.group5.MessageType;
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -21,10 +22,12 @@ public class PacketHandler extends Thread {
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
 	private final Map<String, LinkedBlockingQueue<DatagramPacket>> sessions;
 	private final Executor executor = Executors.newCachedThreadPool();
-	private int numSessions = 0;
+	private final DatagramSocket socket;
+	private byte sessionId;
 
-	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue) {
+	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket) {
 		super("Packet Handler");
+		this.socket = socket;
 		this.packetQueue = packetQueue;
 		sessions = new ConcurrentHashMap<String, LinkedBlockingQueue<DatagramPacket>>();
 	}
@@ -44,13 +47,15 @@ public class PacketHandler extends Thread {
 							continue;
 						}
 						final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
+						sessionsQueue.add(packet);
 						sessions.put(ip, sessionsQueue);
-						final StreamSession session = new StreamSession(packet, sessionsQueue, numSessions++);
+						final StreamSession session = new StreamSession(sessionsQueue, socket, sessionId);
 						executor.execute(session);
 						break;
 					case THROTTLE:
 					case CHALLENGE_RESPONSE:
 					case DISCONNECT:
+						//fall through is intentional
 						if (!sessions.containsKey(ip)) {
 							logger.log(Level.WARNING, "Received MessageType: {0}, but no session exists for IP: {1}", new Object[]{message, ip});
 						}
