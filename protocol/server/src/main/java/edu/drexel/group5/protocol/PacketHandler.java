@@ -24,12 +24,14 @@ public class PacketHandler extends Thread {
 	private final Executor executor = Executors.newCachedThreadPool();
 	private final DatagramSocket socket;
 	private byte sessionId;
+	private final String pathToFile;
 
-	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket) {
+	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, String pathToFile) {
 		super("Packet Handler");
 		this.socket = socket;
 		this.packetQueue = packetQueue;
 		sessions = new ConcurrentHashMap<String, LinkedBlockingQueue<DatagramPacket>>();
+		this.pathToFile = pathToFile;
 	}
 
 	@Override
@@ -73,7 +75,7 @@ public class PacketHandler extends Thread {
 		final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
 		sessionsQueue.add(packet);
 		sessions.put(ip, sessionsQueue);
-		final StreamSession session = new StreamSession(sessionsQueue, socket, sessionId);
+		final StreamSession session = new StreamSession(sessionsQueue, socket, sessionId, pathToFile);
 		executor.execute(session);
 	}
 }

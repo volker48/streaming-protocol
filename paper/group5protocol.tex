@@ -55,15 +55,15 @@ This paper defines a media streaming protocol that allows a properly implemented
 		Upon receiving the ChallengeMessage, the client passes the received challenge value 
 		(as well as its own password) to a hash function and sends the result back to the server.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | }
+	\begin{tabular}{ | c | c | c | c | }
 		\hline
-		1 byte & 1 byte & 4 bytes \\
+		1 byte & 1 byte & 1 byte & n bytes \\
 		\hline
-		Message ID & Session ID &  Challenge Response \\
+		Message ID & Session ID & Response length &  Challenge Response \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
-	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
+	\begin{tabular}{ | p{3cm} | p{1.5cm}  | p{8cm} | }
 		\hline
 		Field Name & Data Type & Definition \\
 		\hline
@@ -72,7 +72,9 @@ This paper defines a media streaming protocol that allows a properly implemented
 		\hline
 		Session ID & byte & Contains the Session ID number pertaining to this message. \\
 		\hline
-		Challenge Response & int & Contains the client's challenge response. \\
+		Response length & byte & The length of the response in bytes \\
+		\hline
+		Challenge Response & bytes & Contains the client's challenge response. \\
 		\hline
 	\end{tabular}
 	\end{description}

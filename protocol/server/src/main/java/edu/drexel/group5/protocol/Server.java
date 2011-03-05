@@ -23,19 +23,22 @@ public class Server extends Thread {
 	private final int port;
 	private final DatagramSocket socket;
 	private final PacketHandler packetHandler;
+	private final String pathToFile;
 
-	public Server(int port) {
+	public Server(int port, String pathToFile) {
 		super("Streaming Protocol Server");
 		Preconditions.checkArgument(port >= 0 && port <= 65535, port + " is not a valid port");
+		Preconditions.checkArgument(!"".equals(pathToFile));
 		logger.log(Level.INFO, "Stream Server starting on port: {0} ...", port);
 		this.packetQueue = new LinkedBlockingQueue<DatagramPacket>();
 		this.port = port;
+		this.pathToFile = pathToFile;
 		try {
 			this.socket = new DatagramSocket(port);
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not create a ServerSocket on port: " + port + " please start the server again with a different unused port", ex);
 		}
-		this.packetHandler = new PacketHandler(packetQueue, socket);
+		this.packetHandler = new PacketHandler(packetQueue, socket, pathToFile);
 		this.packetHandler.start();
 	}
 
@@ -55,8 +58,8 @@ public class Server extends Thread {
 	}
 
 	public static void main(String[] args) {
-		Preconditions.checkArgument(args.length == 1, "No port number given! Please start the server by giving a valid port number.");
-		Server server = new Server(Integer.parseInt(args[0]));
+		Preconditions.checkArgument(args.length == 2, "Invalid number of arguments! Usage: port path-to-file");
+		Server server = new Server(Integer.parseInt(args[0]), args[1]);
 		server.start();
 		try {
 			server.join();

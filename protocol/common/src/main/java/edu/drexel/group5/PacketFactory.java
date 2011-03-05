@@ -87,10 +87,20 @@ public class PacketFactory {
 		output.write(sessionId);
 		messageDigest.update(intToByteArray(challengeValue));
 		messageDigest.update(secret.getBytes("US-ASCII"));
-		output.write(messageDigest.digest());
+		final byte[] digest = messageDigest.digest();
+		output.write(digest.length);
+		output.write(digest);
 		output.flush();
 		final byte[] data = output.toByteArray();
 		output.close();
+		return new DatagramPacket(data, data.length, destination);
+	}
+
+	public DatagramPacket createChallengeResult(byte sessionId, byte result) throws SocketException {
+		final byte[] data = new byte[3];
+		data[0] = MessageType.CHALLENGE_RESULT.getMessageId();
+		data[1] = sessionId;
+		data[2] = result;
 		return new DatagramPacket(data, data.length, destination);
 	}
 
@@ -99,7 +109,7 @@ public class PacketFactory {
 	 * @param value the int to convert.
 	 * @return a byte array of size 4.
 	 */
-	private byte[] intToByteArray(int value) {
+	public byte[] intToByteArray(int value) {
 		return new byte[]{
 					(byte) (value >>> 24),
 					(byte) (value >>> 16),
@@ -125,5 +135,10 @@ public class PacketFactory {
 		final byte[] data = baos.toByteArray();
 		baos.close();
 		return new DatagramPacket(data, data.length, destination);
+	}
+
+	public DatagramPacket createStreamMessage(byte sessionId, byte sequenceNumber, byte[] data, byte[] crc) throws SocketException {
+		final byte[] outputData = new byte[2 + data.length + crc.length];
+		return new DatagramPacket(outputData, outputData.length, destination);
 	}
 }

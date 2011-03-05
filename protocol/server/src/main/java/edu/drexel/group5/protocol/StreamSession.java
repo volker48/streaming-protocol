@@ -3,16 +3,23 @@ package edu.drexel.group5.protocol;
 import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import java.io.ByteArrayInputStream;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.SocketAddress;
+import java.net.SocketException;
+import java.security.NoSuchAlgorithmException;
 import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import edu.drexel.group5.PacketFactory;
 import edu.drexel.group5.State;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.security.MessageDigest;
 
 /**
  * This class represents a session of the protocol. Each client should belong
@@ -28,10 +35,13 @@ public class StreamSession implements Runnable {
 	private final DatagramSocket socket;
 	private final byte sessionId;
 	private State state = State.DISCONNECTED;
-	private static final byte VERSION = 1;
 	private static final int MAX_AUTH_RETRY = 5;
 	private static final int MAX_RETRY_ERROR = 1;
-	private final SocketAddress clientAddress;
+	private final PacketFactory factory;
+	final Random rand = new Random(System.currentTimeMillis());
+	private static final String PASSWORD = "CS544GROUP5";
+	private final String pathToFile;
+	private StreamingThread streamer;
 
 	/**
 	 *
@@ -39,10 +49,12 @@ public class StreamSession implements Runnable {
 	 * The data in this packet will be used for future communication with the
 	 * client.
 	 */
-	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, byte sessionId) {
+	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, byte sessionId, String pathToFile) {
 		Preconditions.checkNotNull(packetQueue);
 		Preconditions.checkNotNull(socket);
+		Preconditions.checkArgument(!"".equals(pathToFile));
 		Preconditions.checkArgument(packetQueue.size() == 1);
+		this.pathToFile = pathToFile;
 		this.packetQueue = packetQueue;
 		this.socket = socket;
 		this.sessionId = sessionId;
@@ -54,40 +66,171 @@ public class StreamSession implements Runnable {
 			Thread.currentThread().interrupt();
 			Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, null, ex);
 		}
-		clientAddress = sessionRequest.getSocketAddress();
+		factory = new PacketFactory(sessionRequest.getSocketAddress());
 	}
 
 	@Override
 	public void run() {
-		try {
-			final PacketFactory factory = new PacketFactory(clientAddress);
-			final Random rand = new Random(System.currentTimeMillis());
-			DatagramPacket session = factory.createSessionMessage(sessionId, VERSION, "WAV", rand.nextInt());
-			socket.send(session);
-			state = state.AUTHENTICATING;
-			int counter = 0;
-			while (counter < MAX_AUTH_RETRY) {
-				DatagramPacket challengeResponse = packetQueue.take();
-				ByteArrayInputStream bis = new ByteArrayInputStream(challengeResponse.getData());
-				MessageType type = MessageType.getMessageTypeFromId((byte) bis.read());
-				if (type != MessageType.CHALLENGE_RESPONSE) {
-					logger.log(Level.WARNING, "Received MessageType: {0} while in the {1} state!", new Object[]{type, state});
-					counter++;
-					continue;
-				}
-				//check hash in response.
+		while (!Thread.currentThread().isInterrupted() && state != State.DISCONNECTED) {
+			final DatagramPacket packet;
+			try {
+				packet = packetQueue.take();
+			} catch (InterruptedException ex) {
+				shutdownSession();
+				continue;
 			}
-			if (counter == MAX_AUTH_RETRY) {
-				state = State.DISCONNECTED;
-				socket.send(factory.createAuthenticationError(sessionId, MAX_RETRY_ERROR));
+			final byte[] data = packet.getData();
+			MessageType messageType = MessageType.getMessageTypeFromId(data[0]);
+			if (state == State.CONNECTING && messageType == messageType.SESSION_REQUEST) {
+				handleSessionRequest(packet);
+			} else if (state == State.STREAMING) {
+				handlePacketWhileStreaming(packet);
+			}
+
+		}
+	}
+
+	private void handleSessionRequest(DatagramPacket packet) {
+		final int version = packet.getData()[1];
+		if (version > SERVER_VERSION) {
+			throw new RuntimeException("Client has incompatible version!");
+		}
+		final int challengeValue = rand.nextInt();
+		try {
+			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, STREAM_FORMAT, challengeValue);
+			socket.send(session);
+		} catch (IOException ex) {
+			shutdownSession();
+		}
+		state = state.AUTHENTICATING;
+		int counter = 0;
+		final MessageDigest md;
+		try {
+			md = MessageDigest.getInstance("SHA-1");
+		} catch (NoSuchAlgorithmException ex) {
+			throw new RuntimeException("SHA-1 is not available on this system!", ex);
+		}
+		md.update(factory.intToByteArray(challengeValue));
+		md.update(PASSWORD.getBytes());
+		byte[] serverCalculatedHash = md.digest();
+		while (counter < MAX_AUTH_RETRY && state != State.AUTHENTICATED) {
+			DatagramPacket challengeResponse;
+			try {
+				challengeResponse = packetQueue.take();
+			} catch (InterruptedException ex) {
+				shutdownSession();
 				return;
 			}
-			while (!Thread.currentThread().isInterrupted() && state == State.STREAMING) {
+			final byte[] data = challengeResponse.getData();
+			MessageType type = MessageType.getMessageTypeFromId(data[0]);
+			if (type != MessageType.CHALLENGE_RESPONSE) {
+				logger.log(Level.WARNING, "Received MessageType: {0} while in the {1} state, ignoring", new Object[]{type, state});
+				continue;
 			}
-		} catch (IOException ex) {
-			Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, null, ex);
-		} catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
+			if (data[1] != sessionId) {
+				logger.log(Level.WARNING, "Received a packet for session id: {0}, but this session has id: {1}",
+						new Object[]{data[1], sessionId});
+				continue;
+			}
+			int lengthOfHash = data[2];
+			ByteArrayInputStream bis = new ByteArrayInputStream(data, 2, lengthOfHash);
+			final byte[] responseHash = new byte[lengthOfHash];
+			bis.read(responseHash, 0, lengthOfHash);
+			try {
+				if (responseHash != serverCalculatedHash) {
+					logger.log(Level.WARNING, "Client did not authenticate!");
+					socket.send(factory.createChallengeResult(sessionId, (byte) 0));
+					counter++;
+				} else {
+					state = State.STREAMING;
+					socket.send(factory.createChallengeResult(sessionId, (byte) 1));
+					startStreaming();
+				}
+			} catch (IOException ex) {
+				shutdownSession();
+			}
+		}
+		if (counter == MAX_AUTH_RETRY) {
+			state = State.DISCONNECTED;
+			try {
+				socket.send(factory.createAuthenticationError(sessionId, MAX_RETRY_ERROR));
+			} catch (IOException ex) {
+				shutdownSession();
+			}
+			logger.log(Level.SEVERE, "Could not authenticate client, max retries reached!");
+			shutdownSession();
+			return;
+		}
+	}
+
+	private void shutdownSession() {
+		Thread.currentThread().interrupt();
+		logger.log(Level.INFO, "Session {0} shutting down...", sessionId);
+	}
+
+	private void handlePacketWhileStreaming(DatagramPacket packet) {
+	}
+
+	private void startStreaming() {
+		streamer = new StreamingThread();
+		streamer.start();
+	}
+
+	private class StreamingThread extends Thread {
+
+		private final BufferedInputStream input;
+		private byte sequenceNumber = 0;
+		private final MessageDigest digest;
+		private final byte[] buffer = new byte[2048];
+
+		public StreamingThread() {
+			try {
+				input = new BufferedInputStream(new FileInputStream(pathToFile));
+			} catch (FileNotFoundException ex) {
+				throw new RuntimeException("Could not open the file for streaming!", ex);
+			}
+			try {
+				digest = MessageDigest.getInstance("MD5");
+			} catch (NoSuchAlgorithmException ex) {
+				throw new RuntimeException("Could not obtain the hash algoritm", ex);
+			}
+		}
+
+		@Override
+		public void run() {
+			while (!isInterrupted()) {
+				int bytesRead;
+				try {
+					bytesRead = input.read(buffer);
+				} catch (IOException ex) {
+					throw new RuntimeException("Error during streaming!", ex);
+				}
+				if (bytesRead == -1) {
+					logger.log(Level.INFO, "End of stream reached, stream complete");
+					try {
+					input.close();
+					} catch (IOException ex) {
+						logger.log(Level.SEVERE, "Could not close the streams!", ex);
+					}
+					return;
+				}
+				byte[] crc = digest.digest(buffer);
+				try {
+					DatagramPacket streamMessage = factory.createStreamMessage(sessionId, sequenceNumber, buffer, crc);
+					socket.send(streamMessage);
+					sequenceNumber++;
+				} catch (SocketException ex) {
+					throw new RuntimeException("Problem creating stream message!", ex);
+				} catch (IOException ex) {
+					throw new RuntimeException("Could not send stream message!", ex);
+				}
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException ex) {
+					logger.log(Level.INFO, "Streaming cancelled!");
+					interrupt();
+				}
+			}
 		}
 	}
 }
