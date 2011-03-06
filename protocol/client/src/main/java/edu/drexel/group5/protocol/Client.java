@@ -125,7 +125,7 @@ public class Client extends Thread {
                 // TODO: figure out if we want to ack this message
                 state = edu.drexel.group5.State.CONNECTED;
             } catch(IOException ex) {
-                logger.log(Level.WARNING, "Problem?");
+                logger.log(Level.WARNING, "Problem?", ex);
             }
         }
     }

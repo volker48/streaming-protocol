@@ -16,9 +16,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import edu.drexel.group5.PacketFactory;
 import edu.drexel.group5.State;
+import edu.drexel.group5.StringUtils;
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
 
 /**
@@ -52,7 +51,6 @@ public class StreamSession implements Runnable {
 	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, byte sessionId, String pathToFile) {
 		Preconditions.checkNotNull(packetQueue);
 		Preconditions.checkNotNull(socket);
-		Preconditions.checkArgument(!"".equals(pathToFile));
 		Preconditions.checkArgument(packetQueue.size() == 1);
 		this.pathToFile = pathToFile;
 		this.packetQueue = packetQueue;
@@ -81,6 +79,7 @@ public class StreamSession implements Runnable {
 			}
 			final byte[] data = packet.getData();
 			MessageType messageType = MessageType.getMessageTypeFromId(data[0]);
+			logger.log(Level.INFO, "Received a packet state is: {0}, MessageType is: {1}", new Object[]{state, messageType});
 			if (state == State.CONNECTING && messageType == messageType.SESSION_REQUEST) {
 				handleSessionRequest(packet);
 			} else if (state == State.STREAMING) {
@@ -91,14 +90,17 @@ public class StreamSession implements Runnable {
 	}
 
 	private void handleSessionRequest(DatagramPacket packet) {
+		logger.log(Level.INFO, "Performing session handshake...");
 		final int version = packet.getData()[1];
 		if (version > SERVER_VERSION) {
 			throw new RuntimeException("Client has incompatible version!");
 		}
 		final int challengeValue = rand.nextInt();
+		logger.log(Level.INFO, "Challenge Value is: {0}", challengeValue);
 		try {
 			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, STREAM_FORMAT, challengeValue);
 			socket.send(session);
+			logger.log(Level.INFO, "Session Message sent to client");
 		} catch (IOException ex) {
 			shutdownSession();
 		}
@@ -113,6 +115,8 @@ public class StreamSession implements Runnable {
 		md.update(factory.intToByteArray(challengeValue));
 		md.update(PASSWORD.getBytes());
 		byte[] serverCalculatedHash = md.digest();
+		final String serverHash = StringUtils.getHexString(serverCalculatedHash);
+		logger.log(Level.INFO, "Server Hash: {0}", serverCalculatedHash);
 		while (counter < MAX_AUTH_RETRY && state != State.AUTHENTICATED) {
 			DatagramPacket challengeResponse;
 			try {
@@ -136,14 +140,18 @@ public class StreamSession implements Runnable {
 			ByteArrayInputStream bis = new ByteArrayInputStream(data, 2, lengthOfHash);
 			final byte[] responseHash = new byte[lengthOfHash];
 			bis.read(responseHash, 0, lengthOfHash);
+			String clientHash = StringUtils.getHexString(responseHash);
+			logger.log(Level.INFO, "Client hash is: {0}", clientHash);
 			try {
 				if (responseHash != serverCalculatedHash) {
 					logger.log(Level.WARNING, "Client did not authenticate!");
 					socket.send(factory.createChallengeResult(sessionId, (byte) 0));
 					counter++;
 				} else {
+					logger.log(Level.INFO, "Hashes match, transitioning to streaming state");
 					state = State.STREAMING;
 					socket.send(factory.createChallengeResult(sessionId, (byte) 1));
+					logger.log(Level.INFO, "Challenge result sent to client");
 					startStreaming();
 				}
 			} catch (IOException ex) {
@@ -177,13 +185,13 @@ public class StreamSession implements Runnable {
 	}
 
 	private class StreamingThread extends Thread {
-
 		private final BufferedInputStream input;
 		private byte sequenceNumber = 0;
 		private final MessageDigest digest;
 		private final byte[] buffer = new byte[2048];
 
 		public StreamingThread() {
+			logger.log(Level.INFO, "Streamer thread initialization");
 			try {
 				input = new BufferedInputStream(new FileInputStream(pathToFile));
 			} catch (FileNotFoundException ex) {

@@ -5,6 +5,7 @@
 
 package edu.drexel.group5;
 
+import java.io.ByteArrayInputStream;
 import java.io.PrintStream;
 import java.security.MessageDigest;
 import org.junit.Test;
