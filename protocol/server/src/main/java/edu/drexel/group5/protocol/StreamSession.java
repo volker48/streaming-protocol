@@ -18,6 +18,7 @@ import edu.drexel.group5.PacketFactory;
 import edu.drexel.group5.State;
 import edu.drexel.group5.StringUtils;
 import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.security.MessageDigest;
 
 /**
@@ -137,24 +138,27 @@ public class StreamSession implements Runnable {
 				shutdownSession();
 				return -1;
 			}
+			logger.log(Level.INFO, "Received a message from the client checking the message...");
 			final byte[] data = challengeResponse.getData();
-			MessageType type = MessageType.getMessageTypeFromId(data[0]);
-			if (type != MessageType.CHALLENGE_RESPONSE) {
-				logger.log(Level.WARNING, "Received MessageType: {0} while in the {1} state, ignoring", new Object[]{type, state});
-				continue;
-			}
-			if (data[1] != sessionId) {
-				logger.log(Level.WARNING, "Received a packet for session id: {0}, but this session has id: {1}",
-						new Object[]{data[1], sessionId});
-				continue;
-			}
-			int lengthOfHash = data[2];
-			ByteArrayInputStream bis = new ByteArrayInputStream(data, 2, lengthOfHash);
-			final byte[] responseHash = new byte[lengthOfHash];
-			bis.read(responseHash, 0, lengthOfHash);
-			String clientHash = StringUtils.getHexString(responseHash);
-			logger.log(Level.INFO, "Client hash is: {0}", clientHash);
+			final DataInputStream input = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(data)));
 			try {
+				MessageType type = MessageType.getMessageTypeFromId(input.readByte());
+				if (type != MessageType.CHALLENGE_RESPONSE) {
+					logger.log(Level.WARNING, "Received MessageType: {0} while in the {1} state, ignoring", new Object[]{type, state});
+					continue;
+				}
+				logger.log(Level.INFO, "Message is a Challenge Response");
+				byte clientSessionId = input.readByte();
+				if (clientSessionId != sessionId) {
+					logger.log(Level.WARNING, "Received a packet for session id: {0}, but this session has id: {1}",
+							new Object[]{data[1], sessionId});
+					continue;
+				}
+				int lengthOfHash = input.readInt();
+				final byte[] responseHash = new byte[lengthOfHash];
+				input.read(responseHash, 0, lengthOfHash);
+				String clientHash = StringUtils.getHexString(responseHash);
+				logger.log(Level.INFO, "Client hash is: {0}", clientHash);
 				if (responseHash != serverCalculatedHash) {
 					logger.log(Level.WARNING, "Client did not authenticate!");
 					socket.send(factory.createChallengeResult(sessionId, (byte) 0));

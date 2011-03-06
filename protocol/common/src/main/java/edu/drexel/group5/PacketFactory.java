@@ -1,9 +1,9 @@
 package edu.drexel.group5;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -83,16 +83,17 @@ public class PacketFactory {
 	 * @throws IOException
 	 */
 	public DatagramPacket createChallengeResponse(byte sessionId, int challengeValue, String secret) throws IOException {
-		final ByteArrayOutputStream output = new ByteArrayOutputStream();
-		output.write(MessageType.CHALLENGE_RESPONSE.getMessageId());
-		output.write(sessionId);
+		final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+		final DataOutputStream output = new DataOutputStream(new BufferedOutputStream(bytes));
+		output.writeByte(MessageType.CHALLENGE_RESPONSE.getMessageId());
+		output.writeByte(sessionId);
 		messageDigest.update(intToByteArray(challengeValue));
 		messageDigest.update(secret.getBytes("US-ASCII"));
 		final byte[] digest = messageDigest.digest();
-		output.write(digest.length);
-		output.write(digest);
+		output.writeInt(digest.length);
+		output.write(digest, 0, digest.length);
 		output.flush();
-		final byte[] data = output.toByteArray();
+		final byte[] data = bytes.toByteArray();
 		output.close();
 		return new DatagramPacket(data, data.length, destination);
 	}

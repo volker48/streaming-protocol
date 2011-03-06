@@ -337,6 +337,7 @@ public class Client extends Thread {
 						logger.log(Level.WARNING, "Received an unexpected message: {0} dropping the packet", message);
 				}
 			} catch (SocketTimeoutException ex) {
+				logger.log(Level.INFO, "Socket timedout. State is: {0}", state);
 				// if the socket times out, we may need to resend the last message to the server
 				switch (state) {
 					case DISCONNECTED:
@@ -357,6 +358,8 @@ public class Client extends Thread {
 					case STREAMING:
 						timeoutStreaming();
 						break;
+					default:
+						throw new IllegalStateException("Unaccounted for state, " + state);
 				}
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Error handling packet!", ex);
