@@ -65,13 +65,16 @@ public class StreamSession implements Runnable {
 			Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, null, ex);
 		}
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
+		handleSessionRequest(sessionRequest);
 	}
 
 	@Override
 	public void run() {
+		logger.log(Level.INFO, "Streaming Session: {0} starting...", sessionId);
 		while (!Thread.currentThread().isInterrupted() && state != State.DISCONNECTED) {
 			final DatagramPacket packet;
 			try {
+				logger.log(Level.INFO, "Waiting for packets from client...");
 				packet = packetQueue.take();
 			} catch (InterruptedException ex) {
 				shutdownSession();
@@ -80,19 +83,16 @@ public class StreamSession implements Runnable {
 			final byte[] data = packet.getData();
 			MessageType messageType = MessageType.getMessageTypeFromId(data[0]);
 			logger.log(Level.INFO, "Received a packet state is: {0}, MessageType is: {1}", new Object[]{state, messageType});
-			if (state == State.CONNECTING && messageType == messageType.SESSION_REQUEST) {
-				handleSessionRequest(packet);
-			} else if (state == State.STREAMING) {
-				handlePacketWhileStreaming(packet);
-			}
+			handlePacketWhileStreaming(packet);
 
 		}
 	}
 
 	private void handleSessionRequest(DatagramPacket packet) {
 		logger.log(Level.INFO, "Performing session handshake...");
-		final int version = packet.getData()[1];
-		if (version > SERVER_VERSION) {
+		final int client = packet.getData()[1];
+		logger.log(Level.INFO, "Client version is: {0}", client);
+		if (client > SERVER_VERSION) {
 			throw new RuntimeException("Client has incompatible version!");
 		}
 		final int challengeValue = rand.nextInt();
@@ -116,7 +116,7 @@ public class StreamSession implements Runnable {
 		md.update(PASSWORD.getBytes());
 		byte[] serverCalculatedHash = md.digest();
 		final String serverHash = StringUtils.getHexString(serverCalculatedHash);
-		logger.log(Level.INFO, "Server Hash: {0}", serverCalculatedHash);
+		logger.log(Level.INFO, "Server Hash: {0}", serverHash);
 		while (counter < MAX_AUTH_RETRY && state != State.AUTHENTICATED) {
 			DatagramPacket challengeResponse;
 			try {
@@ -185,6 +185,7 @@ public class StreamSession implements Runnable {
 	}
 
 	private class StreamingThread extends Thread {
+
 		private final BufferedInputStream input;
 		private byte sequenceNumber = 0;
 		private final MessageDigest digest;
@@ -216,7 +217,7 @@ public class StreamSession implements Runnable {
 				if (bytesRead == -1) {
 					logger.log(Level.INFO, "End of stream reached, stream complete");
 					try {
-					input.close();
+						input.close();
 					} catch (IOException ex) {
 						logger.log(Level.SEVERE, "Could not close the streams!", ex);
 					}

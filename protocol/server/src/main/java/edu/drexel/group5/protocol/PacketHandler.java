@@ -3,7 +3,10 @@ package edu.drexel.group5.protocol;
 import edu.drexel.group5.MessageType;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.SocketAddress;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -20,17 +23,18 @@ public class PacketHandler extends Thread {
 
 	private static final Logger logger = Logger.getLogger(PacketHandler.class.getName());
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
-	private final Map<String, LinkedBlockingQueue<DatagramPacket>> sessions;
+	private final Map<Byte, LinkedBlockingQueue<DatagramPacket>> sessions;
+	private final Set<SocketAddress> connectedClients = new HashSet<SocketAddress>();
 	private final Executor executor = Executors.newCachedThreadPool();
 	private final DatagramSocket socket;
-	private byte sessionId;
+	private byte sessionId = 0;
 	private final String pathToFile;
 
 	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, String pathToFile) {
 		super("Packet Handler");
 		this.socket = socket;
 		this.packetQueue = packetQueue;
-		sessions = new ConcurrentHashMap<String, LinkedBlockingQueue<DatagramPacket>>();
+		sessions = new ConcurrentHashMap<Byte, LinkedBlockingQueue<DatagramPacket>>();
 		this.pathToFile = pathToFile;
 	}
 
@@ -41,25 +45,25 @@ public class PacketHandler extends Thread {
 				DatagramPacket packet = packetQueue.take();
 				byte[] data = packet.getData();
 				MessageType message = MessageType.getMessageTypeFromId(data[0]);
-				String ip = packet.getAddress().getHostAddress();
 				switch (message) {
 					//Setup a new StreamSession to handle the request and subsequent messages
 					case SESSION_REQUEST:
-						if (sessions.containsKey(ip)) {
-							logger.log(Level.WARNING, "Received a SessionRequest for an existing session! Packet Info: {0}", packet);
+						if (connectedClients.contains(packet.getSocketAddress())) {
+							logger.log(Level.FINE, "Received a SessionRequest for an existing session! Packet Info: {0}", packet);
 							continue;
 						}
-						setupNewStreamSession(ip, packet);
+						setupNewStreamSession(packet);
 						break;
 					case THROTTLE:
 					case CHALLENGE_RESPONSE:
 					case DISCONNECT:
 						//fall through is intentional
-						if (!sessions.containsKey(ip)) {
-							logger.log(Level.WARNING, "Received MessageType: {0}, but no session exists for IP: {1}", new Object[]{message, ip});
+						byte clientsSessionId = data[1];
+						if (!connectedClients.contains(packet.getSocketAddress())) {
+							logger.log(Level.WARNING, "Received MessageType: {0}, but no session exists for Session ID: {1}", new Object[]{message, sessionId});
 							continue;
 						}
-						sessions.get(ip).put(packet);
+						sessions.get(clientsSessionId).put(packet);
 						break;
 					default:
 						logger.log(Level.WARNING, "Received an unexpected message: {0} dropping the packet", message);
@@ -71,11 +75,14 @@ public class PacketHandler extends Thread {
 		}
 	}
 
-	private void setupNewStreamSession(String ip, DatagramPacket packet) {
+	private void setupNewStreamSession(DatagramPacket packet) {
+		logger.log(Level.INFO, "Provisionning new Stream session with ip: {0}, port: {1}, and ID: {2}", new Object[]{packet.getAddress(), packet.getPort(), sessionId});
 		final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
 		sessionsQueue.add(packet);
-		sessions.put(ip, sessionsQueue);
+		sessions.put(sessionId, sessionsQueue);
 		final StreamSession session = new StreamSession(sessionsQueue, socket, sessionId, pathToFile);
 		executor.execute(session);
+		connectedClients.add(packet.getSocketAddress());
+		sessionId++;
 	}
 }

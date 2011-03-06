@@ -28,7 +28,7 @@ public class StringUtils {
 		}
 		String hexString;
 		try {
-			hexString = new String(hex, "ASCII");
+			hexString = new String(hex, "US-ASCII");
 		} catch (UnsupportedEncodingException ex) {
 			Logger.getLogger(StringUtils.class.getName()).log(Level.SEVERE, "Could not convert bytes to hex string!", ex);
 		}

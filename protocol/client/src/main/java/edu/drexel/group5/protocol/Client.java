@@ -19,30 +19,31 @@ import java.util.logging.Logger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.SourceDataLine; 
+import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.DataLine;
-import javax.sound.sampled.LineUnavailableException; 
-import javax.sound.sampled.AudioSystem; 
-
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.AudioSystem;
 
 /**
  * This class opens a connection to the server to receive streaming media
  */
 public class Client extends Thread {
+
 	private static final Logger logger = Logger.getLogger(Client.class.getName());
-	private static final int BUFFER_LENGTH = 128; //TODO: This can be lowered I think the largest client-to-server message is pretty small.
-    private static final byte CLIENT_VERSION = 1;
+	private static final int BUFFER_LENGTH = 2048;
+	private static final int SOCKET_TIMEOUT = 5000;
+	private static final byte CLIENT_VERSION = 1;
 	private ObjectInputStream objectIn;
 	private final InetAddress serverAddress;
 	private final int serverPort;
-    private final String password;
+	private final String password;
 	private final DatagramSocket socket;
-    private final PacketFactory packetFactory;
+	private final PacketFactory packetFactory;
 	private final MessageDigest digest;
-    private byte sessionId;
-    private String streamType;
-    private edu.drexel.group5.State state;
-	
+	private byte sessionId;
+	private String streamType;
+	private edu.drexel.group5.State state;
+	private int challengeValue;
 	// Playback data members
 	private final SourceDataLine audioLine;
 	private final float sampleRate;
@@ -57,15 +58,15 @@ public class Client extends Thread {
 		logger.log(Level.INFO, "Stream Client starting");
 		this.serverAddress = serverAddress;
 		this.serverPort = serverPort;
-        this.password = password;
-        this.packetFactory = new PacketFactory(serverPort, serverAddress);
-		
+		this.password = password;
+		this.packetFactory = new PacketFactory(serverPort, serverAddress);
+
 		try {
 			this.digest = MessageDigest.getInstance("MD5");
 		} catch (NoSuchAlgorithmException ex) {
 			throw new RuntimeException("Could not obtain the hash algoritm", ex);
 		}
-		
+
 		// Create an audio line buffer for playback
 		// Could wait until a session has been created to create an audio line
 		// TODO: Figure out if we can set the audio format from source file, sent from server
@@ -79,264 +80,277 @@ public class Client extends Thread {
 			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
 			audioLine = (SourceDataLine) AudioSystem.getLine(info);
 			audioLine.open(format);
-			audioLine.start(); 
-			
+			audioLine.start();
+
 			// Now ready to receive audio buffer via the write method
 			logger.log(Level.INFO, "Now ready to playback audio when received.");
-			
+
 		} catch (LineUnavailableException ex) {
 			throw new RuntimeException("Could not create an open audio line due to no line being available.");
 		} catch (Exception ex) {
 			throw new RuntimeException("Could not create an open audio line due to an unknown error.");
 		}
-		
-		
+
+
 		try {
 			this.socket = new DatagramSocket();
-			socket.setSoTimeout(1000);
+			socket.setSoTimeout(SOCKET_TIMEOUT);
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not create a ClientSocket", ex);
 		}
-		
 
-        this.state = edu.drexel.group5.State.DISCONNECTED;
+
+		this.state = edu.drexel.group5.State.DISCONNECTED;
 	}
 
-    public void acceptSession(byte[] buffer) {
-        if(state != edu.drexel.group5.State.CONNECTING) {
-            logger.log(Level.WARNING, "Received SESSION - not in CONNECTING state");
-        } else {
-            try {
-                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-                sessionId = bytestream.readByte();
-                int serverVersion = bytestream.readByte();
-                int typelen = bytestream.readByte();
-                byte [] typestringbyte = new byte[typelen];
-                bytestream.read(typestringbyte, 0, typelen);
-                streamType = new String(typestringbyte);
+	public void acceptSession(byte[] buffer) {
+		if (state != edu.drexel.group5.State.CONNECTING) {
+			logger.log(Level.WARNING, "Received SESSION - not in CONNECTING state");
+		} else {
+			try {
+				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH));
+				sessionId = bytestream.readByte();
+				int serverVersion = bytestream.readByte();
+				int typelen = bytestream.readByte();
+				byte[] typestringbyte = new byte[typelen];
+				bytestream.readFully(typestringbyte, 0, typelen);
+				streamType = new String(typestringbyte);
 
-                if(serverVersion != CLIENT_VERSION) {
-                    logger.log(Level.WARNING, "Version mismatch: Server = " + serverVersion + " Client = " + CLIENT_VERSION);                	
-			        throw new RuntimeException("Server version does not match");
-                }
+				if (serverVersion != CLIENT_VERSION) {
+					logger.log(Level.WARNING, "Version mismatch: Server = " + serverVersion + " Client = " + CLIENT_VERSION);
+					throw new RuntimeException("Server version does not match");
+				}
 
-                // no message to send to the server
-                // although i think we probably want to ack this
-                // TODO: figure out if we want to ack this message
-                state = edu.drexel.group5.State.CONNECTED;
-            } catch(IOException ex) {
-                logger.log(Level.WARNING, "Problem?", ex);
-            }
-        }
-    }
+				challengeValue = bytestream.readInt();
 
-    public void acceptChallenge(byte[] buffer) {
-        if(state != edu.drexel.group5.State.CONNECTED) {
-            logger.log(Level.WARNING, "Received CHALLENGE - not in CONNECTED state");
-        } else {
-            try {
-                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-                byte sessionId = bytestream.readByte();
-                int challengeValue = bytestream.readInt();
+				socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
 
-                socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
-                state = edu.drexel.group5.State.AUTHENTICATING;
-            } catch(IOException ex) {
-                logger.log(Level.WARNING, "Problem?");
-            }
-        }
-    }
 
-    public void acceptChallengeResult(byte[] buffer) {
-        if(state != edu.drexel.group5.State.AUTHENTICATING) {
-            logger.log(Level.WARNING, "Received CHALLENGE_RESULT - not in AUTHENTICATING state");
-        } else {
-            try {
-                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-                byte sessionId = bytestream.readByte();
-                byte challengeResult = bytestream.readByte();
+				state = edu.drexel.group5.State.AUTHENTICATING;
+			} catch (IOException ex) {
+				logger.log(Level.WARNING, "Problem?", ex);
+			}
+		}
+	}
 
-                if(challengeResult == 1) {
-                    // not sure we need the authenticated state since its never really used
-                    state = edu.drexel.group5.State.AUTHENTICATED;
-                    state = edu.drexel.group5.State.STREAMING;
-                } else {
-                    // go back to connected and wait for challenge from server?
-                    // is this right? should we send a message to the server????
-                    // its unclear from our proposal
-                    // TODO: figure out if this is right
-                    state = edu.drexel.group5.State.CONNECTED;
-                }
-            } catch(IOException ex) {
-                logger.log(Level.WARNING, "Problem?");
-            }
-        }
-    }
+	public void acceptChallenge(byte[] buffer) {
+		if (state != edu.drexel.group5.State.CONNECTED) {
+			logger.log(Level.WARNING, "Received CHALLENGE - not in CONNECTED state");
+		} else {
+			try {
+				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
+				byte sessionId = bytestream.readByte();
+				int challengeValue = bytestream.readInt();
 
-    public void acceptAuthenticationError(byte[] buffer) {
-        if(state != edu.drexel.group5.State.AUTHENTICATING) {
-            logger.log(Level.WARNING, "Received AUTHENTICATION_ERROR - not in AUTHENTICATING state");
-        } else {
-            try {
-                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-                byte sessionId = bytestream.readByte();
-                int errorCode = bytestream.readInt();
+				socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
+				state = edu.drexel.group5.State.AUTHENTICATING;
+			} catch (IOException ex) {
+				logger.log(Level.WARNING, "Problem?");
+			}
+		}
+	}
 
-                logger.log(Level.WARNING, "Authentication Error: {0}", errorCode);
-            } catch(IOException ex) {
-                logger.log(Level.WARNING, "Problem?");
-            }
-        }
-    }
+	public void acceptChallengeResult(byte[] buffer) {
+		if (state != edu.drexel.group5.State.AUTHENTICATING) {
+			logger.log(Level.WARNING, "Received CHALLENGE_RESULT - not in AUTHENTICATING state");
+		} else {
+			try {
+				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
+				byte sessionId = bytestream.readByte();
+				byte challengeResult = bytestream.readByte();
 
-    public void acceptStream(byte[] buffer) {
-        if(state != edu.drexel.group5.State.STREAMING) {
-            logger.log(Level.WARNING, "Received STREAM - not in STREAMING state");
-        } else {
-            try {
-                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-                byte sessionId = bytestream.readByte();
-                byte seqNum = bytestream.readByte();
+				if (challengeResult == 1) {
+					// not sure we need the authenticated state since its never really used
+					state = edu.drexel.group5.State.AUTHENTICATED;
+					state = edu.drexel.group5.State.STREAMING;
+				} else {
+					// go back to connected and wait for challenge from server?
+					// is this right? should we send a message to the server????
+					// its unclear from our proposal
+					// TODO: figure out if this is right
+					state = edu.drexel.group5.State.CONNECTED;
+				}
+			} catch (IOException ex) {
+				logger.log(Level.WARNING, "Problem?");
+			}
+		}
+	}
+
+	public void acceptAuthenticationError(byte[] buffer) {
+		if (state != edu.drexel.group5.State.AUTHENTICATING) {
+			logger.log(Level.WARNING, "Received AUTHENTICATION_ERROR - not in AUTHENTICATING state");
+		} else {
+			try {
+				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
+				byte sessionId = bytestream.readByte();
+				int errorCode = bytestream.readInt();
+
+				logger.log(Level.WARNING, "Authentication Error: {0}", errorCode);
+			} catch (IOException ex) {
+				logger.log(Level.WARNING, "Problem?");
+			}
+		}
+	}
+
+	public void acceptStream(byte[] buffer) {
+		if (state != edu.drexel.group5.State.STREAMING) {
+			logger.log(Level.WARNING, "Received STREAM - not in STREAMING state");
+		} else {
+			try {
+				logger.log(Level.INFO, "In acceptingStream");
+				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
+				byte sessionIdFromServer = bytestream.readByte();
+				byte seqNum = bytestream.readByte();
 				// The server is now sending a fixed length buffer of 2048
 				// not sure is this is what we want to do, but changing client
 				// to receive a buffer of 2048
-				//int datalen = bytestream.readInt();  
-				int datalen = 2048;
-                byte data[] = new byte[datalen];
-                bytestream.read(data, 0, datalen);
-                byte CRC = bytestream.readByte();
+				int datalen = bytestream.readInt();
+				byte data[] = new byte[datalen];
+				bytestream.readFully(data, 0, datalen);
+				int crcLength = bytestream.readInt();
+				byte[] crcFromServer = new byte[crcLength];
+				bytestream.readFully(crcFromServer, 0, crcLength);
+				// compute CRC and check it
+				byte[] computed_crc = digest.digest(data);
+				if (computed_crc != crcFromServer) {
+					logger.log(Level.SEVERE, "Data from server did not pass CRC!"); //FIXME: Not really sure what we should do here
+				}
 
-                // compute CRC and check it
-				byte[] compute_crc = digest.digest(data);
-				// TODO: Need to compare compute_crc and CRC
+				// TODO: compare sequence numbers
 
-                // TODO: compare sequence numbers
-
-                // Place received buffer into pre-configured, open audio playback buffer
+				// Place received buffer into pre-configured, open audio playback buffer
 				// TODO: It might be better to pass the audio format information in the StreamMessage
 				audioLine.write(data, 0, datalen);
-				
-            } catch(IOException ex) {
-                logger.log(Level.WARNING, "Problem?");
-				
-				// Drain and close the audio stream
-				audioLine.drain();
-				audioLine.close();				
-            }
-        }
-    }
 
-    public void acceptStreamError(byte[] buffer) {
-        if(state != edu.drexel.group5.State.STREAMING) {
-            logger.log(Level.WARNING, "Received STREAM_ERROR - not in STREAMING state");
-        } else {
-            try {
-                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-                byte sessionId = bytestream.readByte();
-                int errorCode = bytestream.readInt();
+			} catch (IOException ex) {
+				logger.log(Level.WARNING, "Problem?", ex);
 
-                logger.log(Level.WARNING, "Stream Error: {0}", errorCode);
-				
 				// Drain and close the audio stream
 				audioLine.drain();
 				audioLine.close();
-				
-            } catch(IOException ex) {
-                logger.log(Level.WARNING, "Problem?");
-            }
-        }
-    }
+			}
+		}
+	}
 
-    public void timeoutDisconnected() {
-        try {
-            this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
-            this.state = edu.drexel.group5.State.CONNECTING;
-        } catch(IOException ex) {
-            throw new RuntimeException("Could not send session request", ex);
-        }
-    }
+	public void acceptStreamError(byte[] buffer) {
+		if (state != edu.drexel.group5.State.STREAMING) {
+			logger.log(Level.WARNING, "Received STREAM_ERROR - not in STREAMING state");
+		} else {
+			try {
+				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
+				byte sessionId = bytestream.readByte();
+				int errorCode = bytestream.readInt();
 
-    public void timeoutConnecting() {
-        try {
-            this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
-            this.state = edu.drexel.group5.State.CONNECTING;
-        } catch(IOException ex) {
-            throw new RuntimeException("Could not send session request", ex);
-        }
-    }
+				logger.log(Level.WARNING, "Stream Error: {0}", errorCode);
 
-    public void timeoutConnected() {
-        // nothing to do here
-    }
+				// Drain and close the audio stream
+				audioLine.drain();
+				audioLine.close();
 
-    public void timeoutAuthenticating() {
-        // TODO: need to resend challenge response
-    }
+			} catch (IOException ex) {
+				logger.log(Level.WARNING, "Problem?");
+			}
+		}
+	}
 
-    public void timeoutAuthenticated() {
-        // unused state
-    }
+	public void timeoutDisconnected() {
+		try {
+			this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
+			this.state = edu.drexel.group5.State.CONNECTING;
+		} catch (IOException ex) {
+			throw new RuntimeException("Could not send session request", ex);
+		}
+	}
 
-    public void timeoutStreaming() {
-        // nothing to do here really
-    }
+	private void sendSession() {
+		try {
+			this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
+			this.state = edu.drexel.group5.State.CONNECTING;
+		} catch (IOException ex) {
+			throw new RuntimeException("Could not send session request", ex);
+		}
+	}
+
+	public void timeoutConnecting() {
+		sendSession();
+	}
+
+	public void timeoutConnected() {
+		// nothing to do here
+	}
+
+	public void timeoutAuthenticating() {
+		try {
+			socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
+		} catch (IOException ex) {
+			Logger.getLogger(Client.class.getName()).log(Level.SEVERE, "Couldn't send challenge response!", ex);
+		}
+	}
+
+	public void timeoutAuthenticated() {
+		// unused state
+	}
+
+	public void timeoutStreaming() {
+		// nothing to do here really
+	}
 
 	@Override
 	public void run() {
+		sendSession();
 		while (!isInterrupted()) {
 			try {
 				final byte[] buffer = new byte[BUFFER_LENGTH];
 				final DatagramPacket packet = new DatagramPacket(buffer, BUFFER_LENGTH);
 				socket.receive(packet);
-				logger.log(Level.INFO, "Rcved packet: {0}", packet);
 
-                // handle the received message
-				objectIn = new ObjectInputStream(new BufferedInputStream(new ByteArrayInputStream(packet.getData())));
-				MessageType message = MessageType.getMessageTypeFromId(objectIn.readByte());
-                switch(message) {
+				// handle the received message
+				MessageType message = MessageType.getMessageTypeFromId(packet.getData()[0]);
+				logger.log(Level.INFO, "Rcved packet of MessageType: {0}", message);
+				switch (message) {
 					case SESSION:
-                        acceptSession(buffer);
+						acceptSession(buffer);
 						break;
 					case CHALLENGE:
-                        acceptChallenge(buffer);
+						acceptChallenge(buffer);
 						break;
 					case CHALLENGE_RESULT:
-                        acceptChallengeResult(buffer);
+						acceptChallengeResult(buffer);
 						break;
 					case AUTHENTICATION_ERROR:
-                        acceptAuthenticationError(buffer);
+						acceptAuthenticationError(buffer);
 						break;
 					case STREAM:
-                        acceptStream(buffer);
+						acceptStream(buffer);
 						break;
 					case STREAM_ERROR:
-                        acceptStreamError(buffer);
+						acceptStreamError(buffer);
 						break;
 					default:
 						logger.log(Level.WARNING, "Received an unexpected message: {0} dropping the packet", message);
-                }
-            } catch (SocketTimeoutException ex) {
-                // if the socket times out, we may need to resend the last message to the server
-                switch(state) {
-                    case DISCONNECTED:
-                        timeoutDisconnected();
-                        break;
-                    case CONNECTING:
-                        timeoutConnecting();
-                        break;
-                    case CONNECTED:
-                        timeoutConnected();
-                        break;
-                    case AUTHENTICATING:
-                        timeoutAuthenticating();
-                        break;
-                    case AUTHENTICATED:
-                        timeoutAuthenticated();
-                        break;
-                    case STREAMING:
-                        timeoutStreaming();
-                        break;
-                }
+				}
+			} catch (SocketTimeoutException ex) {
+				// if the socket times out, we may need to resend the last message to the server
+				switch (state) {
+					case DISCONNECTED:
+						timeoutDisconnected();
+						break;
+					case CONNECTING:
+						timeoutConnecting();
+						break;
+					case CONNECTED:
+						timeoutConnected();
+						break;
+					case AUTHENTICATING:
+						timeoutAuthenticating();
+						break;
+					case AUTHENTICATED:
+						timeoutAuthenticated();
+						break;
+					case STREAMING:
+						timeoutStreaming();
+						break;
+				}
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Error handling packet!", ex);
 			}
@@ -348,8 +362,9 @@ public class Client extends Thread {
 		InetAddress serverAddress = null;
 		try {
 			serverAddress = InetAddress.getByName(args[0]);
-		} catch(UnknownHostException ex) {
+		} catch (UnknownHostException ex) {
 			logger.log(Level.SEVERE, "Unknown server", ex);
+			System.exit(1);
 		}
 		Client client = new Client(serverAddress, Integer.parseInt(args[1]), args[2]);
 		client.start();
