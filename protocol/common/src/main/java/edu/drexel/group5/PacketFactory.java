@@ -59,8 +59,8 @@ public class PacketFactory {
 			throw new IllegalArgumentException("Format string must be less than 256 characters!");
 		}
 		byte[] formatBytes = format.getBytes(Charset.forName("US-ASCII"));
-		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-		final ObjectOutputStream out = new ObjectOutputStream(bytesOut);
+		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream(6 + formatBytes.length); //1 for id, 1 for version, 4 for challengeValue
+		final DataOutputStream out = new DataOutputStream(bytesOut);
 		out.writeByte(MessageType.SESSION.getMessageId());
 		out.writeByte(sessionId);
 		out.writeByte(version);
