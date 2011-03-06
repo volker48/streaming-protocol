@@ -57,13 +57,10 @@ public class StreamSession implements Runnable {
 		this.socket = socket;
 		this.sessionId = sessionId;
 		DatagramPacket sessionRequest = null;
-		try {
-			sessionRequest = packetQueue.take();
-			state = State.CONNECTING;
-		} catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
-			Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, null, ex);
-		}
+		
+		// Need to peek (not take), since the session request needs to be taken and handled in the thread (below)
+		sessionRequest = packetQueue.peek();
+		state = State.CONNECTING;
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
 	}
 
@@ -72,6 +69,8 @@ public class StreamSession implements Runnable {
 		while (!Thread.currentThread().isInterrupted() && state != State.DISCONNECTED) {
 			final DatagramPacket packet;
 			try {
+				// This "take" was blocking since the session request message was removed from the queue in the constructor
+				// This was causing the socket timeouts
 				packet = packetQueue.take();
 			} catch (InterruptedException ex) {
 				shutdownSession();
@@ -85,7 +84,6 @@ public class StreamSession implements Runnable {
 			} else if (state == State.STREAMING) {
 				handlePacketWhileStreaming(packet);
 			}
-
 		}
 	}
 
@@ -172,8 +170,8 @@ public class StreamSession implements Runnable {
 	}
 
 	private void shutdownSession() {
-		Thread.currentThread().interrupt();
 		logger.log(Level.INFO, "Session {0} shutting down...", sessionId);
+		Thread.currentThread().interrupt();
 	}
 
 	private void handlePacketWhileStreaming(DatagramPacket packet) {

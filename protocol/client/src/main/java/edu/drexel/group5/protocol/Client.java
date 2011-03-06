@@ -63,7 +63,7 @@ public class Client extends Thread {
 		try {
 			this.digest = MessageDigest.getInstance("MD5");
 		} catch (NoSuchAlgorithmException ex) {
-			throw new RuntimeException("Could not obtain the hash algoritm", ex);
+			throw new RuntimeException("Could not obtain the hash algorithm", ex);
 		}
 		
 		// Create an audio line buffer for playback
@@ -85,9 +85,9 @@ public class Client extends Thread {
 			logger.log(Level.INFO, "Now ready to playback audio when received.");
 			
 		} catch (LineUnavailableException ex) {
-			throw new RuntimeException("Could not create an open audio line due to no line being available.");
+			throw new RuntimeException("Could not create an open audio line due to no line being available.", ex);
 		} catch (Exception ex) {
-			throw new RuntimeException("Could not create an open audio line due to an unknown error.");
+			throw new RuntimeException("Could not create an open audio line due to an unknown error.", ex);
 		}
 		
 		
@@ -100,6 +100,9 @@ public class Client extends Thread {
 		
 
         this.state = edu.drexel.group5.State.DISCONNECTED;
+		
+		// Send initial session request message to server
+		sendSessionRequest();
 	}
 
     public void acceptSession(byte[] buffer) {
@@ -131,6 +134,16 @@ public class Client extends Thread {
         }
     }
 
+	public void sendSessionRequest() {
+		logger.log(Level.INFO, "Sending session request message");
+        try {
+            this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
+            this.state = edu.drexel.group5.State.CONNECTING;
+        } catch(IOException ex) {
+            throw new RuntimeException("Could not send session request", ex);
+        }
+    }
+	
     public void acceptChallenge(byte[] buffer) {
 		logger.log(Level.INFO, "Received CHALLENGE Message");
         if(state != edu.drexel.group5.State.CONNECTED) {
@@ -322,6 +335,7 @@ public class Client extends Thread {
 						logger.log(Level.WARNING, "Received an unexpected message: {0} dropping the packet", message);
                 }
             } catch (SocketTimeoutException ex) {
+				logger.log(Level.WARNING, "Socket connection timed out.", ex);
                 // if the socket times out, we may need to resend the last message to the server
                 switch(state) {
                     case DISCONNECTED:

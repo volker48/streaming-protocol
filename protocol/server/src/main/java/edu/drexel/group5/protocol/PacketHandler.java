@@ -42,6 +42,7 @@ public class PacketHandler extends Thread {
 				byte[] data = packet.getData();
 				MessageType message = MessageType.getMessageTypeFromId(data[0]);
 				String ip = packet.getAddress().getHostAddress();
+				logger.log(Level.INFO, "Received {0} message", message);
 				switch (message) {
 					//Setup a new StreamSession to handle the request and subsequent messages
 					case SESSION_REQUEST:
@@ -72,6 +73,7 @@ public class PacketHandler extends Thread {
 	}
 
 	private void setupNewStreamSession(String ip, DatagramPacket packet) {
+		logger.log(Level.INFO, "Setting up new stream session for IP {0}", ip);
 		final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
 		sessionsQueue.add(packet);
 		sessions.put(ip, sessionsQueue);
