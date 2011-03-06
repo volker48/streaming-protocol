@@ -100,7 +100,6 @@ public class StreamSession implements Runnable {
 			shutdownSession();
 		}
 		state = state.AUTHENTICATING;
-		int counter = 0;
 		final MessageDigest md;
 		try {
 			md = MessageDigest.getInstance("SHA-1");
@@ -112,13 +111,31 @@ public class StreamSession implements Runnable {
 		byte[] serverCalculatedHash = md.digest();
 		final String serverHash = StringUtils.getHexString(serverCalculatedHash);
 		logger.log(Level.INFO, "Server Hash: {0}", serverHash);
-		while (counter < MAX_AUTH_RETRY && state != State.AUTHENTICATED) {
+		int counter = authenticate(serverCalculatedHash);
+		if (counter == MAX_AUTH_RETRY) {
+			state = State.DISCONNECTED;
+			try {
+				socket.send(factory.createAuthenticationError(sessionId, MAX_RETRY_ERROR));
+			} catch (IOException ex) {
+				shutdownSession();
+			}
+			logger.log(Level.SEVERE, "Could not authenticate client, max retries reached!");
+			shutdownSession();
+			return;
+		}
+	}
+
+	private int authenticate(byte[] serverCalculatedHash) {
+		int counter = 0;
+		logger.log(Level.INFO, "Counter: {0}, State: {1}", new Object[]{counter, state});
+		while (counter < MAX_AUTH_RETRY) {
 			DatagramPacket challengeResponse;
 			try {
+				logger.log(Level.INFO, "Waiting for client's challenge response...");
 				challengeResponse = packetQueue.take();
 			} catch (InterruptedException ex) {
 				shutdownSession();
-				return;
+				return -1;
 			}
 			final byte[] data = challengeResponse.getData();
 			MessageType type = MessageType.getMessageTypeFromId(data[0]);
@@ -148,22 +165,13 @@ public class StreamSession implements Runnable {
 					socket.send(factory.createChallengeResult(sessionId, (byte) 1));
 					logger.log(Level.INFO, "Challenge result sent to client");
 					startStreaming();
+					return counter;
 				}
 			} catch (IOException ex) {
 				shutdownSession();
 			}
 		}
-		if (counter == MAX_AUTH_RETRY) {
-			state = State.DISCONNECTED;
-			try {
-				socket.send(factory.createAuthenticationError(sessionId, MAX_RETRY_ERROR));
-			} catch (IOException ex) {
-				shutdownSession();
-			}
-			logger.log(Level.SEVERE, "Could not authenticate client, max retries reached!");
-			shutdownSession();
-			return;
-		}
+		return counter;
 	}
 
 	private void shutdownSession() {
@@ -172,6 +180,7 @@ public class StreamSession implements Runnable {
 	}
 
 	private void handlePacketWhileStreaming(DatagramPacket packet) {
+		logger.log(Level.INFO, "Received packet while streaming!"); //TODO: Implement
 	}
 
 	private void startStreaming() {

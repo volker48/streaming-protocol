@@ -116,17 +116,15 @@ public class Client extends Thread {
 				byte[] typestringbyte = new byte[typelen];
 				bytestream.readFully(typestringbyte, 0, typelen);
 				streamType = new String(typestringbyte);
-
 				if (serverVersion != CLIENT_VERSION) {
 					logger.log(Level.WARNING, "Version mismatch: Server = " + serverVersion + " Client = " + CLIENT_VERSION);
 					throw new RuntimeException("Server version does not match");
 				}
-
+				logger.log(Level.INFO, "Versions are ok...");
 				challengeValue = bytestream.readInt();
-
+				logger.log(Level.INFO, "Challenge Value from server: {0}", challengeValue);
 				socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
-
-
+				logger.log(Level.INFO, "Challenge response sent!");
 				state = edu.drexel.group5.State.AUTHENTICATING;
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Problem?", ex);
@@ -186,9 +184,8 @@ public class Client extends Thread {
 		} else {
 			try {
 				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-				byte sessionId = bytestream.readByte();
+				byte sessionIdFromServer = bytestream.readByte(); //FIXME: We should be checking these every message
 				int errorCode = bytestream.readInt();
-
 				logger.log(Level.WARNING, "Authentication Error: {0}", errorCode);
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Problem?");
@@ -205,6 +202,11 @@ public class Client extends Thread {
 				logger.log(Level.INFO, "In acceptingStream");
 				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
 				byte sessionIdFromServer = bytestream.readByte();
+
+				if (sessionIdFromServer != sessionId) {
+					logger.log(Level.SEVERE, "Session ID mismatch! Client id: {0}, Server id: {1}", new Object[]{sessionId, sessionIdFromServer});
+				}
+
 				// Decompose incoming stream message
 				byte seqNum = bytestream.readByte();
 				int datalen = bytestream.readInt();  
@@ -223,6 +225,7 @@ public class Client extends Thread {
 
 				// Place received buffer into pre-configured, open audio playback buffer
 				// TODO: It might be better to pass the audio format information in the StreamMessage
+				logger.log(Level.INFO, "Writing to audio line");
 				audioLine.write(data, 0, datalen);
 
 			} catch (IOException ex) {
