@@ -18,6 +18,14 @@ import java.net.UnknownHostException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.SourceDataLine; 
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.LineUnavailableException; 
+import javax.sound.sampled.AudioSystem; 
+
 
 /**
  * This class opens a connection to the server to receive streaming media
@@ -32,10 +40,18 @@ public class Client extends Thread {
     private final String password;
 	private final DatagramSocket socket;
     private final PacketFactory packetFactory;
+	private final MessageDigest digest;
     private byte sessionId;
     private String streamType;
     private edu.drexel.group5.State state;
-
+	
+	// Playback data members
+	private final SourceDataLine audioLine;
+	private final float sampleRate;
+	private final int sampleSizeInBits;
+	private final int channels;
+	private final boolean audioSigned;
+	private final boolean bigEndian;
 
 	public Client(InetAddress serverAddress, int serverPort, String password) {
 		super("Streaming Protocol Client");
@@ -45,12 +61,45 @@ public class Client extends Thread {
 		this.serverPort = serverPort;
         this.password = password;
         this.packetFactory = new PacketFactory(serverPort, serverAddress);
+		
+		try {
+			this.digest = MessageDigest.getInstance("MD5");
+		} catch (NoSuchAlgorithmException ex) {
+			throw new RuntimeException("Could not obtain the hash algoritm", ex);
+		}
+		
+		// Create an audio line buffer for playback
+		// Could wait until a session has been created to create an audio line
+		// TODO: Figure out if we can set the audio format from source file, sent from server
+		this.sampleRate = 8000;
+		this.sampleSizeInBits = 8;
+		this.channels = 1;
+		this.audioSigned = true;
+		this.bigEndian = true;
+		try {
+			AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
+			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+			audioLine = (SourceDataLine) AudioSystem.getLine(info);
+			audioLine.open(format);
+			audioLine.start(); 
+			
+			// Now ready to receive audio buffer via the write method
+			logger.log(Level.INFO, "Now ready to playback audio when received.");
+			
+		} catch (LineUnavailableException ex) {
+			throw new RuntimeException("Could not create an open audio line due to no line being available.");
+		} catch (Exception ex) {
+			throw new RuntimeException("Could not create an open audio line due to an unknown error.");
+		}
+		
+		
 		try {
 			this.socket = new DatagramSocket();
 			socket.setSoTimeout(1000);
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not create a ClientSocket", ex);
 		}
+		
 
         this.state = edu.drexel.group5.State.DISCONNECTED;
 	}
@@ -150,18 +199,31 @@ public class Client extends Thread {
                 DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
                 byte sessionId = bytestream.readByte();
                 byte seqNum = bytestream.readByte();
-                int datalen = bytestream.readInt();
+				// The server is now sending a fixed length buffer of 2048
+				// not sure is this is what we want to do, but changing client
+				// to receive a buffer of 2048
+				//int datalen = bytestream.readInt();  
+				int datalen = 2048;
                 byte data[] = new byte[datalen];
                 bytestream.read(data, 0, datalen);
                 byte CRC = bytestream.readByte();
 
-                // TODO: compute CRC and check it
+                // compute CRC and check it
+				byte[] compute_crc = digest.digest(data);
+				// TODO: Need to compare compute_crc and CRC
 
                 // TODO: compare sequence numbers
 
-                // TODO: decode data, place into audio buffer
+                // Place received buffer into pre-configured, open audio playback buffer
+				// TODO: It might be better to pass the audio format information in the StreamMessage
+				audioLine.write(data, 0, datalen);
+				
             } catch(IOException ex) {
                 logger.log(Level.WARNING, "Problem?");
+				
+				// Drain and close the audio stream
+				audioLine.drain();
+				audioLine.close();				
             }
         }
     }
@@ -176,6 +238,11 @@ public class Client extends Thread {
                 int errorCode = bytestream.readInt();
 
                 logger.log(Level.WARNING, "Stream Error: {0}", errorCode);
+				
+				// Drain and close the audio stream
+				audioLine.drain();
+				audioLine.close();
+				
             } catch(IOException ex) {
                 logger.log(Level.WARNING, "Problem?");
             }
