@@ -57,13 +57,8 @@ public class StreamSession implements Runnable {
 		this.socket = socket;
 		this.sessionId = sessionId;
 		DatagramPacket sessionRequest = null;
-		try {
-			sessionRequest = packetQueue.take();
-			state = State.CONNECTING;
-		} catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
-			Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, null, ex);
-		}
+		sessionRequest = packetQueue.peek();
+		state = State.CONNECTING;
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
 	}
 
