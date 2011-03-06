@@ -103,6 +103,7 @@ public class Client extends Thread {
 	}
 
     public void acceptSession(byte[] buffer) {
+		logger.log(Level.INFO, "Received SESSION Message");
         if(state != edu.drexel.group5.State.CONNECTING) {
             logger.log(Level.WARNING, "Received SESSION - not in CONNECTING state");
         } else {
@@ -131,6 +132,7 @@ public class Client extends Thread {
     }
 
     public void acceptChallenge(byte[] buffer) {
+		logger.log(Level.INFO, "Received CHALLENGE Message");
         if(state != edu.drexel.group5.State.CONNECTED) {
             logger.log(Level.WARNING, "Received CHALLENGE - not in CONNECTED state");
         } else {
@@ -148,6 +150,7 @@ public class Client extends Thread {
     }
 
     public void acceptChallengeResult(byte[] buffer) {
+		logger.log(Level.INFO, "Received CHALLENGE RESULT Message");
         if(state != edu.drexel.group5.State.AUTHENTICATING) {
             logger.log(Level.WARNING, "Received CHALLENGE_RESULT - not in AUTHENTICATING state");
         } else {
@@ -174,6 +177,7 @@ public class Client extends Thread {
     }
 
     public void acceptAuthenticationError(byte[] buffer) {
+		logger.log(Level.INFO, "Received AUTH ERROR Message");
         if(state != edu.drexel.group5.State.AUTHENTICATING) {
             logger.log(Level.WARNING, "Received AUTHENTICATION_ERROR - not in AUTHENTICATING state");
         } else {
@@ -190,21 +194,22 @@ public class Client extends Thread {
     }
 
     public void acceptStream(byte[] buffer) {
+		logger.log(Level.INFO, "Received STREAM Message");
         if(state != edu.drexel.group5.State.STREAMING) {
             logger.log(Level.WARNING, "Received STREAM - not in STREAMING state");
         } else {
             try {
-                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
+                DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));			
+				
+				// Decompose incoming stream message
                 byte sessionId = bytestream.readByte();
                 byte seqNum = bytestream.readByte();
-				// The server is now sending a fixed length buffer of 2048
-				// not sure is this is what we want to do, but changing client
-				// to receive a buffer of 2048
-				//int datalen = bytestream.readInt();  
-				int datalen = 2048;
+				int datalen = bytestream.readInt();  
                 byte data[] = new byte[datalen];
                 bytestream.read(data, 0, datalen);
-                byte CRC = bytestream.readByte();
+				int crclen = bytestream.readInt();
+				byte crc[] = new byte[crclen];
+				bytestream.read(crc, 0, crclen);
 
                 // compute CRC and check it
 				byte[] compute_crc = digest.digest(data);
@@ -227,6 +232,7 @@ public class Client extends Thread {
     }
 
     public void acceptStreamError(byte[] buffer) {
+		logger.log(Level.INFO, "Received STREAM ERROR Message");
         if(state != edu.drexel.group5.State.STREAMING) {
             logger.log(Level.WARNING, "Received STREAM_ERROR - not in STREAMING state");
         } else {
