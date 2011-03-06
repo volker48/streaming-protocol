@@ -255,11 +255,11 @@ This paper defines a media streaming protocol that allows a properly implemented
 		These messages are sent while the protocol is in the streaming state. They contain the 
 		actual data that is being streamed. The message consists of a message ID identifying it as a data message, a session ID identifying the session, a four-byte data length field, and a variable $n$-byte data chunk.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | c | c | c | }
+	\begin{tabular}{ | c | c | c | c | c | c |c | }
 		\hline
-		1 byte & 1 byte & 1 byte & 4 bytes & $n$ bytes & 1 byte \\
+		1 byte & 1 byte & 1 byte & 4 bytes & $n$ bytes & 4 bytes & $m$ bytes \\
 		\hline
-		Message ID & Session ID & Sequence Number & Data Length & Encoded Data & CRC \\
+		Message ID & Session ID & Sequence Number & Data Length & Encoded Data & CRC length & CRC \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
@@ -277,6 +277,8 @@ This paper defines a media streaming protocol that allows a properly implemented
 		Data Length & int & Contains the value of $n$. \\
 		\hline
         Encoded Data & variable & Encoded stream data. \\
+        \hline
+        CRC Length & int & The length of the CRC. \\
         \hline
         CRC & byte & Cyclic redundancy check for the packet. \\
         \hline

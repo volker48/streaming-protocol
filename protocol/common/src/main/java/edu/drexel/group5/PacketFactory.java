@@ -1,6 +1,7 @@
 package edu.drexel.group5;
 
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.net.DatagramPacket;
@@ -137,8 +138,17 @@ public class PacketFactory {
 		return new DatagramPacket(data, data.length, destination);
 	}
 
-	public DatagramPacket createStreamMessage(byte sessionId, byte sequenceNumber, byte[] data, byte[] crc) throws SocketException {
-		final byte[] outputData = new byte[2 + data.length + crc.length];
+	public DatagramPacket createStreamMessage(byte sessionId, byte sequenceNumber, byte[] data, byte[] crc) throws SocketException, IOException {
+		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
+		final DataOutputStream outputStream = new DataOutputStream(bytesOut);
+		outputStream.write(MessageType.STREAM.getMessageId());
+		outputStream.write(sessionId);
+		outputStream.write(sequenceNumber);
+		outputStream.writeInt(data.length);
+		outputStream.write(data, 0, data.length);
+		outputStream.writeInt(crc.length);
+		outputStream.write(crc, 0, crc.length);
+		final byte[] outputData = bytesOut.toByteArray();
 		return new DatagramPacket(outputData, outputData.length, destination);
 	}
 }
