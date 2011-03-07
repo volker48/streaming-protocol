@@ -261,6 +261,7 @@ public class Client extends Thread {
 	}
 
 	public void timeoutDisconnected() {
+		logger.log(Level.INFO, "In timeoutDisconnected");
 		try {
 			this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
 			this.state = edu.drexel.group5.State.CONNECTING;
@@ -270,6 +271,7 @@ public class Client extends Thread {
 	}
 
 	private void sendSession() {
+		logger.log(Level.INFO, "Sending SessionRequest!");
 		try {
 			this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
 			this.state = edu.drexel.group5.State.CONNECTING;
@@ -289,6 +291,7 @@ public class Client extends Thread {
 	public void timeoutAuthenticating() {
 		try {
 			socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
+			logger.log(Level.INFO, "Sending ChallengeResponse");
 		} catch (IOException ex) {
 			Logger.getLogger(Client.class.getName()).log(Level.SEVERE, "Couldn't send challenge response!", ex);
 		}

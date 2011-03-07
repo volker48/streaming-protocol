@@ -42,31 +42,31 @@ public class StreamSession implements Runnable {
 	private static final String PASSWORD = "CS544GROUP5";
 	private final String pathToFile;
 	private StreamingThread streamer;
+	private final DatagramPacket sessionRequest;
 
 	/**
 	 *
-	 * @param packet a DatagramPacket that represents a SESSION_REQUEST message.
+	 * @param sessionRequest a DatagramPacket that represents a SESSION_REQUEST message.
 	 * The data in this packet will be used for future communication with the
 	 * client.
 	 */
-	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, byte sessionId, String pathToFile) {
+	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramPacket sessionRequest, DatagramSocket socket, byte sessionId, String pathToFile) {
 		Preconditions.checkNotNull(packetQueue);
 		Preconditions.checkNotNull(socket);
-		Preconditions.checkArgument(packetQueue.size() == 1);
+		Preconditions.checkArgument(packetQueue.size() == 0);
 		this.pathToFile = pathToFile;
 		this.packetQueue = packetQueue;
 		this.socket = socket;
 		this.sessionId = sessionId;
-		DatagramPacket sessionRequest = null;
-		sessionRequest = packetQueue.peek();
+		this.sessionRequest = sessionRequest;
 		state = State.CONNECTING;
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
-		handleSessionRequest(sessionRequest);
 	}
 
 	@Override
 	public void run() {
 		logger.log(Level.INFO, "Streaming Session: {0} starting...", sessionId);
+		handleSessionRequest(sessionRequest);
 		while (!Thread.currentThread().isInterrupted() && state != State.DISCONNECTED) {
 			final DatagramPacket packet;
 			try {

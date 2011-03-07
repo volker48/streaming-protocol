@@ -4,10 +4,10 @@ import edu.drexel.group5.MessageType;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketAddress;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -22,7 +22,7 @@ import java.util.logging.Logger;
 public class PacketHandler extends Thread {
 
 	private static final Logger logger = Logger.getLogger(PacketHandler.class.getName());
-	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
+	private final LinkedBlockingQueue<DatagramPacket> serverPacketQueue;
 	private final Map<Byte, LinkedBlockingQueue<DatagramPacket>> sessions;
 	private final Set<SocketAddress> connectedClients = new HashSet<SocketAddress>();
 	private final Executor executor = Executors.newCachedThreadPool();
@@ -33,8 +33,8 @@ public class PacketHandler extends Thread {
 	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, String pathToFile) {
 		super("Packet Handler");
 		this.socket = socket;
-		this.packetQueue = packetQueue;
-		sessions = new ConcurrentHashMap<Byte, LinkedBlockingQueue<DatagramPacket>>();
+		this.serverPacketQueue = packetQueue;
+		sessions = new HashMap<Byte, LinkedBlockingQueue<DatagramPacket>>();
 		this.pathToFile = pathToFile;
 	}
 
@@ -42,14 +42,17 @@ public class PacketHandler extends Thread {
 	public void run() {
 		while (!isInterrupted()) {
 			try {
-				DatagramPacket packet = packetQueue.take();
+				logger.log(Level.INFO, "Waiting for packet...");
+				DatagramPacket packet = serverPacketQueue.take();
+				logger.log(Level.INFO, "Packet taken from queue");
 				byte[] data = packet.getData();
 				MessageType message = MessageType.getMessageTypeFromId(data[0]);
+				logger.log(Level.INFO, "Received message type: {0}", message);
 				switch (message) {
 					//Setup a new StreamSession to handle the request and subsequent messages
 					case SESSION_REQUEST:
 						if (connectedClients.contains(packet.getSocketAddress())) {
-							logger.log(Level.FINE, "Received a SessionRequest for an existing session! Packet Info: {0}", packet);
+							logger.log(Level.INFO, "Received a SessionRequest for an existing session! Packet Info: {0}", packet);
 							continue;
 						}
 						setupNewStreamSession(packet);
@@ -75,14 +78,13 @@ public class PacketHandler extends Thread {
 		}
 	}
 
-	private void setupNewStreamSession(DatagramPacket packet) {
-		logger.log(Level.INFO, "Provisionning new Stream session with ip: {0}, port: {1}, and ID: {2}", new Object[]{packet.getAddress(), packet.getPort(), sessionId});
-		final LinkedBlockingQueue<DatagramPacket> sessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
-		sessionsQueue.add(packet);
-		sessions.put(sessionId, sessionsQueue);
-		final StreamSession session = new StreamSession(sessionsQueue, socket, sessionId, pathToFile);
-		executor.execute(session);
-		connectedClients.add(packet.getSocketAddress());
+	private void setupNewStreamSession(DatagramPacket sessionRequest) {
+		logger.log(Level.INFO, "Provisionning new Stream session with ip: {0}, port: {1}, and ID: {2}", new Object[]{sessionRequest.getAddress(), sessionRequest.getPort(), sessionId});
+		final LinkedBlockingQueue<DatagramPacket> newSessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
+		sessions.put(sessionId, newSessionsQueue);
+		final StreamSession session = new StreamSession(newSessionsQueue, sessionRequest, socket, sessionId, pathToFile);
+		connectedClients.add(sessionRequest.getSocketAddress());
 		sessionId++;
+		executor.execute(session);
 	}
 }

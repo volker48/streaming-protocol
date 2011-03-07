@@ -49,10 +49,13 @@ public class Server extends Thread {
 				final byte[] buffer = new byte[BUFFER_LENGTH];
 				final DatagramPacket packet = new DatagramPacket(buffer, BUFFER_LENGTH);
 				socket.receive(packet);
-				logger.log(Level.INFO, "Rcved packet from IP: {0}, Port: {1}", new Object[]{packet.getAddress(), packet.getPort()});
-				packetQueue.add(packet);
+				logger.log(Level.INFO, "Received packet from IP: {0}, Port: {1}", new Object[]{packet.getAddress(), packet.getPort()});
+				packetQueue.put(packet);
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Error handling packet!", ex);
+			} catch (InterruptedException ex) {
+				interrupt();
+				logger.log(Level.INFO, "Server shutting down...");
 			}
 		}
 	}

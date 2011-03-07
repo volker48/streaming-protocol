@@ -10,7 +10,7 @@ public enum MessageType {
 	SESSION((byte) 2),
 	CHALLENGE((byte) 3),
 	CHALLENGE_RESPONSE((byte) 4),
-	CHALLENGE_RESULT((byte) 5),
+	CHALLENGE_RESULT((byte) 8),
 	AUTHENTICATION_ERROR((byte) 9),
 	STREAM((byte) 5),
 	THROTTLE((byte) 7),
