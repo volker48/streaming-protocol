@@ -4,7 +4,6 @@ import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import edu.drexel.group5.PacketFactory;
 
-import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -18,6 +17,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.SourceDataLine;
 import javax.sound.sampled.DataLine;
@@ -217,7 +217,7 @@ public class Client extends Thread {
 				bytestream.readFully(crcFromServer, 0, crcLength);
 				// compute CRC and check it
 				byte[] computed_crc = digest.digest(data);
-				if (computed_crc != crcFromServer) {
+				if (!Arrays.equals(computed_crc, crcFromServer)) {
 					logger.log(Level.SEVERE, "Data from server did not pass CRC!"); //FIXME: Not really sure what we should do here
 				}
 

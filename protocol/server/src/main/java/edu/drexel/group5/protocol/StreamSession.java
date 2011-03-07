@@ -20,6 +20,7 @@ import edu.drexel.group5.StringUtils;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.security.MessageDigest;
+import java.util.Arrays;
 
 /**
  * This class represents a session of the protocol. Each client should belong
@@ -159,7 +160,7 @@ public class StreamSession implements Runnable {
 				input.read(responseHash, 0, lengthOfHash);
 				String clientHash = StringUtils.getHexString(responseHash);
 				logger.log(Level.INFO, "Client hash is: {0}", clientHash);
-				if (responseHash != serverCalculatedHash) {
+				if (!Arrays.equals(responseHash, serverCalculatedHash)) {
 					logger.log(Level.WARNING, "Client did not authenticate!");
 					socket.send(factory.createChallengeResult(sessionId, (byte) 0));
 					counter++;
