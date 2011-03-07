@@ -142,9 +142,9 @@ public class PacketFactory {
 	public DatagramPacket createStreamMessage(byte sessionId, byte sequenceNumber, byte[] data, byte[] crc) throws SocketException, IOException {
 		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
 		final DataOutputStream outputStream = new DataOutputStream(bytesOut);
-		outputStream.write(MessageType.STREAM.getMessageId());
-		outputStream.write(sessionId);
-		outputStream.write(sequenceNumber);
+		outputStream.writeByte(MessageType.STREAM.getMessageId());
+		outputStream.writeByte(sessionId);
+		outputStream.writeByte(sequenceNumber);
 		outputStream.writeInt(data.length);
 		outputStream.write(data, 0, data.length);
 		outputStream.writeInt(crc.length);
