@@ -4,6 +4,7 @@ import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.File;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -12,6 +13,7 @@ import java.net.SocketException;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import javax.sound.sampled.*;
 
 /**
  *
@@ -54,11 +56,16 @@ public class PacketFactory {
 	 * @param challengeValue the random int that will be hashed with the shared secret by the client.
 	 * @return
 	 */
-	public DatagramPacket createSessionMessage(byte sessionId, byte version, String format, int challengeValue) throws IOException {
-		if (format.length() > 256) {
-			throw new IllegalArgumentException("Format string must be less than 256 characters!");
-		}
-		byte[] formatBytes = format.getBytes(Charset.forName("US-ASCII"));
+	public DatagramPacket createSessionMessage(byte sessionId, byte version, int challengeValue, String pathToFile) throws IOException {
+        AudioInputStream audioInputStream = null;
+        try {
+            audioInputStream = AudioSystem.getAudioInputStream(new File(pathToFile));
+        } catch (UnsupportedAudioFileException ex) {
+            throw new RuntimeException("UnsupportedAudioFile", ex);
+        }
+        AudioFormat format = audioInputStream.getFormat();
+
+        byte[] formatBytes = format.toString().getBytes(Charset.forName("US-ASCII"));
 		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream(6 + formatBytes.length); //1 for id, 1 for version, 4 for challengeValue
 		final DataOutputStream out = new DataOutputStream(bytesOut);
 		out.writeByte(MessageType.SESSION.getMessageId());

@@ -30,7 +30,7 @@ import javax.sound.sampled.AudioSystem;
 public class Client extends Thread {
 
 	private static final Logger logger = Logger.getLogger(Client.class.getName());
-	private static final int BUFFER_LENGTH = 2048;
+	private static final int BUFFER_LENGTH = 4096;
 	private static final int SOCKET_TIMEOUT = 5000;
 	private static final byte CLIENT_VERSION = 1;
 	private ObjectInputStream objectIn;
@@ -67,31 +67,6 @@ public class Client extends Thread {
 			throw new RuntimeException("Could not obtain the hash algoritm", ex);
 		}
 
-		// Create an audio line buffer for playback
-		// Could wait until a session has been created to create an audio line
-		// TODO: Figure out if we can set the audio format from source file, sent from server
-		this.sampleRate = 8000;
-		this.sampleSizeInBits = 8;
-		this.channels = 1;
-		this.audioSigned = true;
-		this.bigEndian = true;
-		try {
-			AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
-			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
-			audioLine = (SourceDataLine) AudioSystem.getLine(info);
-			audioLine.open(format);
-			audioLine.start();
-
-			// Now ready to receive audio buffer via the write method
-			logger.log(Level.INFO, "Now ready to playback audio when received.");
-
-		} catch (LineUnavailableException ex) {
-			throw new RuntimeException("Could not create an open audio line due to no line being available.");
-		} catch (Exception ex) {
-			throw new RuntimeException("Could not create an open audio line due to an unknown error.");
-		}
-
-
 		try {
 			this.socket = new DatagramSocket();
 			socket.setSoTimeout(SOCKET_TIMEOUT);
@@ -102,6 +77,50 @@ public class Client extends Thread {
 
 		this.state = edu.drexel.group5.State.DISCONNECTED;
 	}
+
+    public void parseAudioFormat(String streamType) {
+        // parse stream type (not too robust, oh well)
+        // example: PCM_SIGNED 8000.0 Hz, 16 bit, stereo, 4 bytes/frame, little-endian
+        if(streamType.contains("8000.0 Hz")) {
+            sampleRate = 8000;
+        } else if(streamType.contains("16000.0 Hz")) {
+            sampleRate = 16000;
+        } else if(streamType.contains("44100.0 Hz")) {
+            sampleRate = 44100;
+        } else {
+            throw new RuntimeException("Unknown sample rate");
+        }
+
+        if(streamType.contains("16 bit")) {
+            sampleSizeInBits = 16;
+        } else if(streamType.contains("8 bit")) {
+            sampleSizeInBits = 8;
+        } else {
+            throw new RuntimeException("Unknown sample size in bits");
+        }
+
+        if(streamType.contains("stereo")) {
+            channels = 2;
+        } else if(streamType.contains("mono")) {
+            channels = 1;
+        } else {
+            throw new RuntimeException("Unknown channel count");
+        }
+
+        if(streamType.contains("SIGNED")) {
+            audioSigned = true;
+        } else if(streamType.contains("UNSIGNED")) {
+            audioSigned = false;
+        } else {
+            throw new RuntimeException("Unknown signed");
+        }
+
+        if(streamType.contains("little-endian")) {
+            bigEndian = false;
+        } else if(streamType.contains("big-endian")) {
+            bigEndian = true;
+        }
+    }
 
 	public void acceptSession(byte[] buffer) {
 		logger.log(Level.INFO, "Received SESSION Message");
@@ -116,6 +135,25 @@ public class Client extends Thread {
 				byte[] typestringbyte = new byte[typelen];
 				bytestream.readFully(typestringbyte, 0, typelen);
 				streamType = new String(typestringbyte);
+
+                    
+
+		        try {
+			        AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
+			        DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+			        audioLine = (SourceDataLine) AudioSystem.getLine(info);
+			        audioLine.open(format);
+			        audioLine.start();
+
+			        // Now ready to receive audio buffer via the write method
+			        logger.log(Level.INFO, "Now ready to playback audio when received.");
+
+		        } catch (LineUnavailableException ex) {
+			        throw new RuntimeException("Could not create an open audio line due to no line being available.");
+		        } catch (Exception ex) {
+			        throw new RuntimeException("Could not create an open audio line due to an unknown error.");
+		        }
+
 				if (serverVersion != CLIENT_VERSION) {
 					logger.log(Level.WARNING, "Version mismatch: Server = " + serverVersion + " Client = " + CLIENT_VERSION);
 					throw new RuntimeException("Server version does not match");

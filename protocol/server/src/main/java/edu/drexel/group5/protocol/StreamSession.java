@@ -3,6 +3,7 @@ package edu.drexel.group5.protocol;
 import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import javax.sound.sampled.*;
 
 /**
  * This class represents a session of the protocol. Each client should belong
@@ -31,7 +33,6 @@ public class StreamSession implements Runnable {
 
 	private static final Logger logger = Logger.getLogger(StreamSession.class.getName());
 	private static final byte SERVER_VERSION = 1;
-	private static final String STREAM_FORMAT = "DEFAULT";
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
 	private final DatagramSocket socket;
 	private final byte sessionId;
@@ -95,7 +96,7 @@ public class StreamSession implements Runnable {
 		final int challengeValue = rand.nextInt();
 		logger.log(Level.INFO, "Challenge Value is: {0}", challengeValue);
 		try {
-			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, STREAM_FORMAT, challengeValue);
+			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, challengeValue, pathToFile);
 			socket.send(session);
 			logger.log(Level.INFO, "Session Message sent to client");
 		} catch (IOException ex) {
@@ -195,7 +196,7 @@ public class StreamSession implements Runnable {
 
 	private class StreamingThread extends Thread {
 
-		private final BufferedInputStream input;
+        private AudioInputStream input = null;
 		private byte sequenceNumber = 0;
 		private final MessageDigest digest;
 		private final byte[] buffer = new byte[2048];
@@ -203,10 +204,16 @@ public class StreamSession implements Runnable {
 		public StreamingThread() {
 			logger.log(Level.INFO, "Streamer thread initialization");
 			try {
-				input = new BufferedInputStream(new FileInputStream(pathToFile));
+                input = AudioSystem.getAudioInputStream(new File(pathToFile));
+                AudioFormat format = input.getFormat();
+                logger.log(Level.INFO, "Audio format: " + format.toString());
 			} catch (FileNotFoundException ex) {
 				throw new RuntimeException("Could not open the file for streaming!", ex);
-			}
+			} catch (UnsupportedAudioFileException ex) {
+                throw new RuntimeException("Unsupported Audio File Exception", ex);
+            } catch (IOException ex) {
+                throw new RuntimeException("IOException", ex);
+            }
 			try {
 				digest = MessageDigest.getInstance("MD5");
 			} catch (NoSuchAlgorithmException ex) {
@@ -219,7 +226,7 @@ public class StreamSession implements Runnable {
 			while (!isInterrupted()) {
 				int bytesRead;
 				try {
-					bytesRead = input.read(buffer);
+                    bytesRead = input.read(buffer, 0, buffer.length);
 				} catch (IOException ex) {
 					throw new RuntimeException("Error during streaming!", ex);
 				}
@@ -243,7 +250,9 @@ public class StreamSession implements Runnable {
 					throw new RuntimeException("Could not send stream message!", ex);
 				}
 				try {
-					Thread.sleep(100);
+                    // TODO: playback is very sensitive to this value, there's probably
+                    // a canonical way to determine it
+					Thread.sleep(25); 
 				} catch (InterruptedException ex) {
 					logger.log(Level.INFO, "Streaming cancelled!");
 					interrupt();
