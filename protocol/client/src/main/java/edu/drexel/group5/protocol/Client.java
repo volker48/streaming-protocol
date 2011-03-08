@@ -49,6 +49,7 @@ public class Client extends Thread {
 	private int channels;
 	private boolean audioSigned;
 	private boolean bigEndian;
+	private int curSeqNum = -1;
 
 	public Client(InetAddress serverAddress, int serverPort, String password) {
 		super("Streaming Protocol Client");
@@ -240,10 +241,14 @@ public class Client extends Thread {
 				}
 
 				// Decompose incoming stream message
-				byte seqNum = bytestream.readByte();
+				int seqNum = bytestream.readInt();
 				int datalen = bytestream.readInt();  
+				logger.log(Level.INFO, "Stream Message Details [SESSID:{0},SEQNUM:{1},DATALEN:{2}]",new Object[]{sessionIdFromServer, seqNum, datalen});
+
 				byte data[] = new byte[datalen];
 				bytestream.readFully(data, 0, datalen);
+
+				// Handle CRC
 				int crcLength = bytestream.readInt();
 				byte[] crcFromServer = new byte[crcLength];
 				bytestream.readFully(crcFromServer, 0, crcLength);
@@ -253,7 +258,24 @@ public class Client extends Thread {
 					logger.log(Level.SEVERE, "Data from server did not pass CRC!"); //FIXME: Not really sure what we should do here
 				}
 
-				// TODO: compare sequence numbers
+				// Compare sequence numbers
+				curSeqNum++;
+				if (curSeqNum == seqNum)
+				{
+					// We have received the next sequence number expected
+					logger.log(Level.INFO, "Valid sequencing: SeqNum expected={0}, SeqNum received={1}", new Object[]{curSeqNum, seqNum});
+				}
+				else
+				{
+					// We did not receive the sequence number expected, probably due to lag
+					logger.log(Level.INFO, "Invalid sequencing: SeqNum expected={0}, SeqNum received={1}. Missed {2} packets.", new Object[]{curSeqNum, seqNum, (seqNum-curSeqNum)});
+
+					// Rather than stop playing the audio, probably better to throw out the missed frame and move on.
+					// A good way to fix the lag is to slow the message rate.
+					// Reset the sequence number we are expecting.
+					curSeqNum = seqNum;
+				}
+
 
 				// Place received buffer into pre-configured, open audio playback buffer
 				// TODO: It might be better to pass the audio format information in the StreamMessage

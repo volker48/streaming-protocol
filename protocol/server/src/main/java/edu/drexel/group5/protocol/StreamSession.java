@@ -197,24 +197,47 @@ public class StreamSession implements Runnable {
 
 	private class StreamingThread extends Thread {
 
-        private AudioInputStream input = null;
-		private byte sequenceNumber = 0;
+		//private final BufferedInputStream input;
+		private final AudioInputStream input;
+		private int sequenceNumber = 0;
 		private final MessageDigest digest;
-		private final byte[] buffer = new byte[2048];
+		private final byte[] buffer;
+
+		// These two variables control the audio is sent (and therefore the playback quality on the client)
+		private int sleep = 25;
+		private int bytesPerMessage = 1000;
 
 		public StreamingThread() {
 			logger.log(Level.INFO, "Streamer thread initialization");
 			try {
-                input = AudioSystem.getAudioInputStream(new File(pathToFile));
+				// Get the audio stream to transmit
+				File soundFile = new File(pathToFile);
+				input = AudioSystem.getAudioInputStream(soundFile);
                 AudioFormat format = input.getFormat();
-                logger.log(Level.INFO, "Audio format: " + format.toString());
+
+				// Logging to find out what audio file and format we are sending
+				logger.log(Level.INFO, "Audio file properties: {0}", format.toString());
+				logger.log(Level.INFO, "AUDIO - Frame Rate = {0}", format.getFrameRate());
+				logger.log(Level.INFO, "AUDIO - Frame Size = {0}", format.getFrameSize());
+				logger.log(Level.INFO, "AUDIO - Channels = {0}", format.getChannels());
+				logger.log(Level.INFO, "AUDIO - Encoding = {0}", format.getEncoding());
+				logger.log(Level.INFO, "AUDIO - Sample Rate = {0}", format.getSampleRate());
+				logger.log(Level.INFO, "AUDIO - Sample Size = {0}", format.getSampleSizeInBits());
+				logger.log(Level.INFO, "AUDIO - Big Endian = {0}", format.isBigEndian());
+				logger.log(Level.INFO, "AUDIO - Frames (file) = {0}", input.getFrameLength());
+
+				buffer = new byte[bytesPerMessage];
+
+
 			} catch (FileNotFoundException ex) {
 				throw new RuntimeException("Could not open the file for streaming!", ex);
 			} catch (UnsupportedAudioFileException ex) {
-                throw new RuntimeException("Unsupported Audio File Exception", ex);
+				throw new RuntimeException("Audio file type not supported.", ex);
             } catch (IOException ex) {
-                throw new RuntimeException("IOException", ex);
+				throw new RuntimeException("Error when reading file.", ex);
             }
+
+
 			try {
 				digest = MessageDigest.getInstance("MD5");
 			} catch (NoSuchAlgorithmException ex) {
@@ -227,7 +250,7 @@ public class StreamSession implements Runnable {
 			while (!isInterrupted()) {
 				int bytesRead;
 				try {
-                    bytesRead = input.read(buffer, 0, buffer.length);
+					bytesRead = input.read(buffer, 0, bytesPerMessage);
 				} catch (IOException ex) {
 					throw new RuntimeException("Error during streaming!", ex);
 				}
@@ -251,9 +274,8 @@ public class StreamSession implements Runnable {
 					throw new RuntimeException("Could not send stream message!", ex);
 				}
 				try {
-                    // TODO: playback is very sensitive to this value, there's probably
+					Thread.sleep(sleep);
                     // a canonical way to determine it
-					Thread.sleep(25); 
 				} catch (InterruptedException ex) {
 					logger.log(Level.INFO, "Streaming cancelled!");
 					interrupt();
