@@ -202,7 +202,6 @@ public class StreamSession implements Runnable {
 		private int sequenceNumber = 0;
 		private final MessageDigest digest;
 		private final byte[] buffer;
-
 		// These two variables control the audio is sent (and therefore the playback quality on the client)
 		private int sleep = 25;
 		private int bytesPerMessage = 1000;
@@ -213,7 +212,7 @@ public class StreamSession implements Runnable {
 				// Get the audio stream to transmit
 				File soundFile = new File(pathToFile);
 				input = AudioSystem.getAudioInputStream(soundFile);
-                AudioFormat format = input.getFormat();
+				AudioFormat format = input.getFormat();
 
 				// Logging to find out what audio file and format we are sending
 				logger.log(Level.INFO, "Audio file properties: {0}", format.toString());
@@ -233,9 +232,9 @@ public class StreamSession implements Runnable {
 				throw new RuntimeException("Could not open the file for streaming!", ex);
 			} catch (UnsupportedAudioFileException ex) {
 				throw new RuntimeException("Audio file type not supported.", ex);
-            } catch (IOException ex) {
+			} catch (IOException ex) {
 				throw new RuntimeException("Error when reading file.", ex);
-            }
+			}
 
 
 			try {
@@ -275,7 +274,7 @@ public class StreamSession implements Runnable {
 				}
 				try {
 					Thread.sleep(sleep);
-                    // a canonical way to determine it
+					// a canonical way to determine it
 				} catch (InterruptedException ex) {
 					logger.log(Level.INFO, "Streaming cancelled!");
 					interrupt();

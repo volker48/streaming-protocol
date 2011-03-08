@@ -75,49 +75,49 @@ public class Client extends Thread {
 		this.state = edu.drexel.group5.State.DISCONNECTED;
 	}
 
-    public void parseAudioFormat(String streamType) {
-        // parse stream type (not too robust, oh well)
-        // example: PCM_SIGNED 8000.0 Hz, 16 bit, stereo, 4 bytes/frame, little-endian
-        if(streamType.contains("8000.0 Hz")) {
-            sampleRate = 8000;
-        } else if(streamType.contains("16000.0 Hz")) {
-            sampleRate = 16000;
-        } else if(streamType.contains("44100.0 Hz")) {
-            sampleRate = 44100;
-        } else {
-            throw new RuntimeException("Unknown sample rate");
-        }
+	public void parseAudioFormat(String streamType) {
+		// parse stream type (not too robust, oh well)
+		// example: PCM_SIGNED 8000.0 Hz, 16 bit, stereo, 4 bytes/frame, little-endian
+		if (streamType.contains("8000.0 Hz")) {
+			sampleRate = 8000;
+		} else if (streamType.contains("16000.0 Hz")) {
+			sampleRate = 16000;
+		} else if (streamType.contains("44100.0 Hz")) {
+			sampleRate = 44100;
+		} else {
+			throw new RuntimeException("Unknown sample rate");
+		}
 
-        if(streamType.contains("16 bit")) {
-            sampleSizeInBits = 16;
-        } else if(streamType.contains("8 bit")) {
-            sampleSizeInBits = 8;
-        } else {
-            throw new RuntimeException("Unknown sample size in bits");
-        }
+		if (streamType.contains("16 bit")) {
+			sampleSizeInBits = 16;
+		} else if (streamType.contains("8 bit")) {
+			sampleSizeInBits = 8;
+		} else {
+			throw new RuntimeException("Unknown sample size in bits");
+		}
 
-        if(streamType.contains("stereo")) {
-            channels = 2;
-        } else if(streamType.contains("mono")) {
-            channels = 1;
-        } else {
-            throw new RuntimeException("Unknown channel count");
-        }
+		if (streamType.contains("stereo")) {
+			channels = 2;
+		} else if (streamType.contains("mono")) {
+			channels = 1;
+		} else {
+			throw new RuntimeException("Unknown channel count");
+		}
 
-        if(streamType.contains("SIGNED")) {
-            audioSigned = true;
-        } else if(streamType.contains("UNSIGNED")) {
-            audioSigned = false;
-        } else {
-            throw new RuntimeException("Unknown signed");
-        }
+		if (streamType.contains("SIGNED")) {
+			audioSigned = true;
+		} else if (streamType.contains("UNSIGNED")) {
+			audioSigned = false;
+		} else {
+			throw new RuntimeException("Unknown signed");
+		}
 
-        if(streamType.contains("little-endian")) {
-            bigEndian = false;
-        } else if(streamType.contains("big-endian")) {
-            bigEndian = true;
-        }
-    }
+		if (streamType.contains("little-endian")) {
+			bigEndian = false;
+		} else if (streamType.contains("big-endian")) {
+			bigEndian = true;
+		}
+	}
 
 	public void acceptSession(byte[] buffer) {
 		logger.log(Level.INFO, "Received SESSION Message");
@@ -133,21 +133,21 @@ public class Client extends Thread {
 				bytestream.readFully(typestringbyte, 0, typelen);
 				streamType = new String(typestringbyte);
 
-		        try {
-			        AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
-			        DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
-			        audioLine = (SourceDataLine) AudioSystem.getLine(info);
-			        audioLine.open(format);
-			        audioLine.start();
+				try {
+					AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
+					DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+					audioLine = (SourceDataLine) AudioSystem.getLine(info);
+					audioLine.open(format);
+					audioLine.start();
 
-			        // Now ready to receive audio buffer via the write method
-			        logger.log(Level.INFO, "Now ready to playback audio when received.");
+					// Now ready to receive audio buffer via the write method
+					logger.log(Level.INFO, "Now ready to playback audio when received.");
 
-		        } catch (LineUnavailableException ex) {
-			        throw new RuntimeException("Could not create an open audio line due to no line being available.");
-		        } catch (Exception ex) {
-			        throw new RuntimeException("Could not create an open audio line due to an unknown error.");
-		        }
+				} catch (LineUnavailableException ex) {
+					throw new RuntimeException("Could not create an open audio line due to no line being available.");
+				} catch (Exception ex) {
+					throw new RuntimeException("Could not create an open audio line due to an unknown error.");
+				}
 
 				if (serverVersion != CLIENT_VERSION) {
 					logger.log(Level.WARNING, "Version mismatch: Server = " + serverVersion + " Client = " + CLIENT_VERSION);
@@ -242,8 +242,8 @@ public class Client extends Thread {
 
 				// Decompose incoming stream message
 				int seqNum = bytestream.readInt();
-				int datalen = bytestream.readInt();  
-				logger.log(Level.INFO, "Stream Message Details [SESSID:{0},SEQNUM:{1},DATALEN:{2}]",new Object[]{sessionIdFromServer, seqNum, datalen});
+				int datalen = bytestream.readInt();
+				logger.log(Level.INFO, "Stream Message Details [SESSID:{0},SEQNUM:{1},DATALEN:{2}]", new Object[]{sessionIdFromServer, seqNum, datalen});
 
 				byte data[] = new byte[datalen];
 				bytestream.readFully(data, 0, datalen);
@@ -255,20 +255,17 @@ public class Client extends Thread {
 				// compute CRC and check it
 				byte[] computed_crc = digest.digest(data);
 				if (!Arrays.equals(computed_crc, crcFromServer)) {
-					logger.log(Level.SEVERE, "Data from server did not pass CRC!"); //FIXME: Not really sure what we should do here
+					logger.log(Level.SEVERE, "Data from server did not pass CRC!");
 				}
 
 				// Compare sequence numbers
 				curSeqNum++;
-				if (curSeqNum == seqNum)
-				{
+				if (curSeqNum == seqNum) {
 					// We have received the next sequence number expected
 					logger.log(Level.INFO, "Valid sequencing: SeqNum expected={0}, SeqNum received={1}", new Object[]{curSeqNum, seqNum});
-				}
-				else
-				{
+				} else {
 					// We did not receive the sequence number expected, probably due to lag
-					logger.log(Level.INFO, "Invalid sequencing: SeqNum expected={0}, SeqNum received={1}. Missed {2} packets.", new Object[]{curSeqNum, seqNum, (seqNum-curSeqNum)});
+					logger.log(Level.INFO, "Invalid sequencing: SeqNum expected={0}, SeqNum received={1}. Missed {2} packets.", new Object[]{curSeqNum, seqNum, (seqNum - curSeqNum)});
 
 					// Rather than stop playing the audio, probably better to throw out the missed frame and move on.
 					// A good way to fix the lag is to slow the message rate.
