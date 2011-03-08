@@ -185,14 +185,23 @@ request.
 		This is the server's reply to the SessionRequestMessage. It tells the client what version of 
 		the protocol that will be used during the streaming session, and contains the session id 
 		that will be used in further communication with the server.  It also contains the first 
-		authentication challenge value sent from the server to the client.
+		authentication challenge value sent from the server to the client, as well as the parameters 
+		the audio file that the server intends to stream.
 		This message signals the transition from the Connecting State to the Authenticating state.
 	\item[Message Format] \hfill \\
 	\begin{tabular}{ | c | c | c | c | c | c |}
 		\hline
-		1 byte & 1 byte & 1 byte & 1 byte & $n$-bytes &  int \\
+		1 byte & 1 byte & 1 byte & 4 bytes & 4 bytes & 4 bytes  \\
 		\hline
-		Message ID & Session ID &  Version Number & Type Length & Stream Type & Challenge \\
+		Message ID & Session ID & Version Number & Chal. Value & Sample Rate & Sample Size  \\
+		\hline
+	\end{tabular}
+	\item \hfill \\
+	\begin{tabular}{ | c | c | c |}
+		\hline
+		4 bytes & 1 bit & 1 bit \\
+		\hline
+		Num. of Channels   & Signed Flag  & Big-Endian Flag \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
@@ -207,12 +216,22 @@ request.
 		Version Number & byte & Identifies the protocol version to be used in this connection.
 						\newline 1 = Version 1.0 \\
 		\hline
-        Type Length & byte & Contains the value of $n$, the length of the Stream Type field. \\
-        \hline
-        Stream Type & variable & An ASCII-encoded string describing the encoding format and data type of the stream. \\
-        \hline
-        Challenge & int & A 4 byte integer challenge from the server. \\
-        \hline
+		Challenge Value & int & Contains the server-generated challenge value.  \\
+		\hline
+		Sample Rate & float & Contains the audio file's sampling rate (samples per second).  \\
+		\hline
+		Sample Size & int & Contains the number of bits in each sample.  \\
+		\hline
+		Channels & int & Contains the number of channels in the audio stream.  \\
+		\hline
+		Signed Flag & bool & Indicates whether the audio data is signed. 
+						\newline 0 = Unsigned
+						\newline 1 = Signed \\
+		\hline
+		Big-Endian Flag & bool & Indicates whether the audio data is big-endian. 
+						\newline 0 = Little-endian
+						\newline 1 = Big-endian \\
+		\hline
 	\end{tabular}
 	\end{description}
 \subsubsection{RechallengeMessage}
@@ -238,7 +257,7 @@ request.
 		\hline
 		Session ID & byte & Contains the Session ID number pertaining to this message. \\
 		\hline
-		Challenge Value & int & Contains a randomly-generated challenge value. \\
+		Challenge Value & int & Contains the server-generated challenge value. \\
 		\hline
 	\end{tabular}
 	\end{description}
