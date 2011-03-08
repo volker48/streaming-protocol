@@ -20,6 +20,46 @@
 \section{Introduction}
 This paper defines a media streaming protocol that allows a properly implemented server to stream media to connected clients. Clients are able the join at any time during the streaming process and may be required to authenticate themselves to the server. The protocol is designed to deal with arbitrary streaming data types, including live or prerecorded video and/or audio.
 
+
+\section{States}
+This section describes the states of the protocol, the messages expected in those states, and the
+transitions between states.
+
+\subsection{Disconnected}
+The protocol always begins in the disconnected state. The client transitions from the disconnected
+to connecting state immediately after  sending the server a SessionRequest message. 
+The server transitions to the connecting state upon receipt of the SessionRequest message.
+
+\subsection{Connecting}
+In the connecting state, the client will wait an implementation dependent amount of time for the 
+session message. If the client does not receive the message within the timeout it will resend
+the session request to the server. If the server is already processing a session request for a client
+it should ignore subsequent requests.
+
+After the server provisions the session, it sends the client a SessionMessage. This message 
+contains the session id the client will use for subsequent communication with the server as
+well as the challenge value for the CHAP authentication, which is described in more detail
+in section~\ref{sec:security}.
+
+\subsection{Authenticating}
+After the client receives the SessionMessage containing the challenge value, it computes
+a hash using the SHA-1 algorithm of the challenge value concatenated with a shared secret. The
+client then sends the hash in a ChallengeResponse message to the server. The server compares
+the clients hash with its own calculated hash. If the hashes match, then the server begins sending
+StreamMessages to the client. If the hash comparison fails, then the server sends the client a
+RechallengeMessage that contains a new challenge value. If the client fails an implementation
+dependent number of challenges the server will send an AuthenticationError message to the client.
+
+While in the authentication state, the client will remain in the Authentication state until it receives
+a RechallengeMessage at which time it will calculate a the new hash and send the 
+server a new ChallengeResponse. If the client receives a StreamMessage it will transition to 
+the Streaming state. If the client receives no messages before the implementation dependent
+timeout expires it will resend the last ChallengeResponse assuming that the packet was lost.
+
+\subsection{Streaming}
+%todo
+
+
 \section{Messages}
 \subsection{Client-to-Server Messages}
 \subsubsection{SessionRequestMessage}
@@ -137,9 +177,9 @@ This paper defines a media streaming protocol that allows a properly implemented
 		the protocol that will be used during the streaming session. It also contains the session id 
 		that will be used in further communication with the server.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | c | c | }
+	\begin{tabular}{ | c | c | c | c | c | c |}
 		\hline
-		1 byte & 1 byte & 1 byte & 1 byte & $n$-bytes \\
+		1 byte & 1 byte & 1 byte & 1 byte & $n$-bytes &  int challenge\\
 		\hline
 		Message ID & Session ID &  Version Number & Type Length & Stream Type \\
 		\hline
@@ -159,6 +199,8 @@ This paper defines a media streaming protocol that allows a properly implemented
         Type Length & byte & Contains the value of $n$, the length of the Stream Type field. \\
         \hline
         Stream Type & variable & An ASCII-encoded string describing the encoding format and data type of the stream. \\
+        \hline
+        Challenge & int & A 4 byte integer challenge from the server. \\
         \hline
 	\end{tabular}
 	\end{description}
@@ -280,7 +322,7 @@ This paper defines a media streaming protocol that allows a properly implemented
         \hline
         CRC Length & int & The length of the CRC. \\
         \hline
-        CRC & byte & Cyclic redundancy check for the packet. \\
+        CRC & byte & Cyclic redundancy check for the data. \\
         \hline
 	\end{tabular}
 	\end{description}
@@ -317,22 +359,23 @@ This paper defines a media streaming protocol that allows a properly implemented
 \section{DFA}
 \begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,bend angle=75,inner sep=1pt, every state/.style={draw=blue!50,very thick,fill=blue!20, font=\footnotesize}]
 
-\foreach \name/\text/\angle in {1/disconnected/180, 2/connecting/120, 3/connected/60, 4/authenticating/0, 5/authenticated/300, 6/streaming/240}
+\foreach \name/\text/\angle in {1/disconnected/180, 2/connecting/90,  3/authenticating/0, 4/streaming/270}
 \node[state,xshift=10cm,yshift=2cm](\name) at (\angle:5cm) {\text};
 
 \path 
-	(1) edge				node {session req} 	(2)
-	(2) edge				node {session msg} 	(3)
-	      edge [bend right]		node[swap] {timeout} 		(1)	
-	(3) edge				node {chlg}		(4)
-	      edge				node {timeout}		(1)	
-	(4) edge 				node {chlg success}	(5)
-	      edge [loop right]		node {chlg fail}          (4)
-	      edge 				node {auth err}          (1)
-	(5) edge				node {stream}		(6)
-	(6) edge				node {disc}		(1)
-	      edge [loop below]	node {throttle}		(6)
-	      edge [bend left]		node {stream err}	(1)	      	
+	(1) edge				node {session req} 		(2)
+	(2) edge				node {session msg} 		(3)
+	      edge [loop right]		node {timeout} 			(2)
+	      edge [loop above]	node{session req}		(2)	
+	(3)	
+	      edge [loop right]		node {rechallenge}          	(4)
+	      edge 				node {auth err}          		(1)
+	      edge				node {stream}			(4)
+	      edge [bend left]		node {chlg resp}		(4)
+	(4) edge				node {disconnect}		(1)
+	      edge [loop below]	node {throttle}			(4)
+	      edge [loop above] node{stream}			(4)
+	      edge [bend left]		node {stream err}		(1)	      	
 	
 	;
 
@@ -352,6 +395,7 @@ This paper defines a media streaming protocol that allows a properly implemented
 Protocol version information is included in connection messages so that the protocol version used by both sides can be established during the configuration phase.  This allows future improvements to the protocol to be implemented without rendering existing client applications unusable. In addition to this, the type of media and encoding that the stream uses are sent to the client as an ASCII-encoded string. This allows clients and servers to implement additional encodings as they are developed without updates to the protocol.
 
 \section{Security}
+\label{sec:security}
 This protocol uses a CHAP-like handshaking protocol for authentication of clients.  After the connection has been established, the server sends a challenge message to the client.  Both the client and server pass a password through a pre-determined hash function, and the server checks the results and informs the client of success or failure.
 
 \section{Reliability}
