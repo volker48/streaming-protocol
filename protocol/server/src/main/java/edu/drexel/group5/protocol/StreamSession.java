@@ -19,6 +19,7 @@ import edu.drexel.group5.State;
 import edu.drexel.group5.StringUtils;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import javax.sound.sampled.*;
@@ -44,6 +45,7 @@ public class StreamSession implements Runnable {
 	private final String pathToFile;
 	private StreamingThread streamer;
 	private final DatagramPacket sessionRequest;
+	private final AudioFormat format;
 
 	/**
 	 *
@@ -51,7 +53,9 @@ public class StreamSession implements Runnable {
 	 * The data in this packet will be used for future communication with the
 	 * client.
 	 */
-	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramPacket sessionRequest, DatagramSocket socket, byte sessionId, String pathToFile) {
+	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue,
+			DatagramPacket sessionRequest, DatagramSocket socket,
+			byte sessionId, String pathToFile, AudioFormat format) {
 		Preconditions.checkNotNull(packetQueue);
 		Preconditions.checkNotNull(socket);
 		Preconditions.checkArgument(packetQueue.size() == 0);
@@ -60,6 +64,7 @@ public class StreamSession implements Runnable {
 		this.socket = socket;
 		this.sessionId = sessionId;
 		this.sessionRequest = sessionRequest;
+		this.format = format;
 		state = State.CONNECTING;
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
 	}
@@ -90,12 +95,18 @@ public class StreamSession implements Runnable {
 		final int client = packet.getData()[1];
 		logger.log(Level.INFO, "Client version is: {0}", client);
 		if (client > SERVER_VERSION) {
+			try {
+				//create stream Error message
+				socket.send(factory.createDisconnectMessage(sessionId));
+			} catch (IOException ex) {
+				Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, "", ex);
+			}
 			throw new RuntimeException("Client has incompatible version!");
 		}
 		final int challengeValue = rand.nextInt();
 		logger.log(Level.INFO, "Challenge Value is: {0}", challengeValue);
 		try {
-			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, challengeValue, pathToFile);
+			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, challengeValue, format);
 			socket.send(session);
 			logger.log(Level.INFO, "Session Message sent to client");
 		} catch (IOException ex) {
