@@ -13,6 +13,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.sound.sampled.AudioFormat;
 
 /**
  * This class does the work of processing the client packets and provisioning
@@ -29,13 +30,16 @@ public class PacketHandler extends Thread {
 	private final DatagramSocket socket;
 	private byte sessionId = 0;
 	private final String pathToFile;
+	private final AudioFormat format;
 
-	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramSocket socket, String pathToFile) {
+	public PacketHandler(LinkedBlockingQueue<DatagramPacket> packetQueue, 
+			DatagramSocket socket, String pathToFile, AudioFormat format) {
 		super("Packet Handler");
 		this.socket = socket;
 		this.serverPacketQueue = packetQueue;
 		sessions = new HashMap<Byte, LinkedBlockingQueue<DatagramPacket>>();
 		this.pathToFile = pathToFile;
+		this.format = format;
 	}
 
 	@Override
@@ -80,9 +84,12 @@ public class PacketHandler extends Thread {
 
 	private void setupNewStreamSession(DatagramPacket sessionRequest) {
 		logger.log(Level.INFO, "Provisionning new Stream session with ip: {0}, port: {1}, and ID: {2}", new Object[]{sessionRequest.getAddress(), sessionRequest.getPort(), sessionId});
-		final LinkedBlockingQueue<DatagramPacket> newSessionsQueue = new LinkedBlockingQueue<DatagramPacket>();
+		final LinkedBlockingQueue<DatagramPacket> newSessionsQueue =
+				new LinkedBlockingQueue<DatagramPacket>();
 		sessions.put(sessionId, newSessionsQueue);
-		final StreamSession session = new StreamSession(newSessionsQueue, sessionRequest, socket, sessionId, pathToFile);
+		final StreamSession session =
+				new StreamSession(newSessionsQueue, sessionRequest,
+				socket, sessionId, pathToFile, format);
 		connectedClients.add(sessionRequest.getSocketAddress());
 		sessionId++;
 		executor.execute(session);

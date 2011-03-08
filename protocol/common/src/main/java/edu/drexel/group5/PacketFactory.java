@@ -58,24 +58,18 @@ public class PacketFactory {
 	 * @param challengeValue the random int that will be hashed with the shared secret by the client.
 	 * @return
 	 */
-	public DatagramPacket createSessionMessage(byte sessionId, byte version, int challengeValue, String pathToFile) throws IOException {
-        AudioInputStream audioInputStream = null;
-        try {
-            audioInputStream = AudioSystem.getAudioInputStream(new File(pathToFile));
-        } catch (UnsupportedAudioFileException ex) {
-            throw new RuntimeException("UnsupportedAudioFile", ex);
-        }
-        AudioFormat format = audioInputStream.getFormat();
-
-        byte[] formatBytes = format.toString().getBytes(Charset.forName("US-ASCII"));
-		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream(6 + formatBytes.length); //1 for id, 1 for version, 4 for challengeValue
+	public DatagramPacket createSessionMessage(byte sessionId, byte version, int challengeValue, AudioFormat audioFormat) throws IOException {
+		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
 		final DataOutputStream out = new DataOutputStream(bytesOut);
 		out.writeByte(MessageType.SESSION.getMessageId());
 		out.writeByte(sessionId);
 		out.writeByte(version);
-		out.writeByte(formatBytes.length);
-		out.write(formatBytes);
 		out.writeInt(challengeValue);
+		out.writeFloat(audioFormat.getSampleRate());
+		out.writeInt(audioFormat.getSampleSizeInBits());
+		out.writeInt(audioFormat.getChannels());
+		out.writeBoolean(audioFormat.getEncoding() == AudioFormat.Encoding.PCM_SIGNED ? true : false);
+		out.writeBoolean(audioFormat.isBigEndian());
 		out.flush();
 		final byte[] data = bytesOut.toByteArray();
 		out.close();
@@ -108,8 +102,9 @@ public class PacketFactory {
 	}
 
 	public DatagramPacket createRechallengeMessage(byte sessionId, int challengeValue) throws SocketException {
-		final byte[] data = new byte[5]; //1 for sessionId 4 fo challengeValue
+		final byte[] data = new byte[6]; //1 for message type, 1 for sessionId 4 fo challengeValue
 		final ByteBuffer buffer = ByteBuffer.wrap(data);
+		buffer.put(MessageType.RECHALLENGE.getMessageId());
 		buffer.put(sessionId);
 		buffer.putInt(challengeValue);
 		return new DatagramPacket(data, data.length, destination);

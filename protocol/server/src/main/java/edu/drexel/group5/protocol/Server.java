@@ -1,12 +1,17 @@
 package edu.drexel.group5.protocol;
 
 import com.google.common.base.Preconditions;
+import java.io.File;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.sound.sampled.AudioFileFormat;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.UnsupportedAudioFileException;
 
 /**
  * This class is responsible for listening for UDP client messages. It does not
@@ -20,25 +25,20 @@ public class Server extends Thread {
 	private static final Logger logger = Logger.getLogger(Server.class.getName());
 	private static final int BUFFER_LENGTH = 128; //TODO: This can be lowered I think the largest client-to-server message is pretty small.
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
-	private final int port;
 	private final DatagramSocket socket;
 	private final PacketHandler packetHandler;
-	private final String pathToFile;
 
-	public Server(int port, String pathToFile) {
+	public Server(int port, String pathToFile, AudioFormat format) {
 		super("Streaming Protocol Server");
-		Preconditions.checkArgument(port >= 0 && port <= 65535, port + " is not a valid port");
-		Preconditions.checkArgument(!"".equals(pathToFile));
+		Preconditions.checkArgument(port >= 0 && port <= 65535, "%s is not a valid port", port);
 		logger.log(Level.INFO, "Stream Server starting on port: {0} ...", port);
 		this.packetQueue = new LinkedBlockingQueue<DatagramPacket>();
-		this.port = port;
-		this.pathToFile = pathToFile;
 		try {
 			this.socket = new DatagramSocket(port);
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not create a ServerSocket on port: " + port + " please start the server again with a different unused port", ex);
 		}
-		this.packetHandler = new PacketHandler(packetQueue, socket, pathToFile);
+		this.packetHandler = new PacketHandler(packetQueue, socket, pathToFile, format);
 		this.packetHandler.start();
 	}
 
@@ -62,7 +62,23 @@ public class Server extends Thread {
 
 	public static void main(String[] args) {
 		Preconditions.checkArgument(args.length == 2, "Invalid number of arguments! Usage: port path-to-file");
-		Server server = new Server(Integer.parseInt(args[0]), args[1]);
+		File audioFile = new File(args[1]);
+		Preconditions.checkArgument(audioFile.isFile(), "The argument for the path to the file to stream is not a file!");
+		final AudioFileFormat audioFileFormat;
+
+		try {
+			audioFileFormat = AudioSystem.getAudioFileFormat(audioFile);
+		} catch (UnsupportedAudioFileException ex) {
+			Logger.getLogger(Server.class.getName()).log(Level.SEVERE, "The file given to the server is not an audio file!", ex);
+			System.exit(1);
+			return;
+		} catch (IOException ex) {
+			Logger.getLogger(Server.class.getName()).log(Level.SEVERE, "Could not read the file at: " + audioFile, ex);
+			System.exit(1);
+			return;
+		}
+		AudioFormat format = audioFileFormat.getFormat();
+		Server server = new Server(Integer.parseInt(args[0]), args[1], format);
 		server.start();
 		try {
 			server.join();
