@@ -173,11 +173,16 @@ public class Client extends Thread {
 		} else {
 			try {
 				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-				byte sessionId = bytestream.readByte();
+				byte sessionIdFromServer = bytestream.readByte();
+				if (sessionIdFromServer != sessionId) {
+					logger.log(Level.SEVERE, "Session ID mismatch! Client id: {0}, Server id: {1}", new Object[]{sessionId, sessionIdFromServer});
+					return;  // stop processing this message
+				}
+				
 				int challengeValue = bytestream.readInt();
-
 				socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
 				state = edu.drexel.group5.State.AUTHENTICATING;
+
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Problem?");
 			}
@@ -191,7 +196,12 @@ public class Client extends Thread {
 		} else {
 			try {
 				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-				byte sessionId = bytestream.readByte();
+				byte sessionIdFromServer = bytestream.readByte();
+				if (sessionIdFromServer != sessionId) {
+					logger.log(Level.SEVERE, "Session ID mismatch! Client id: {0}, Server id: {1}", new Object[]{sessionId, sessionIdFromServer});
+					return;  // stop processing this message
+				}
+				
 				byte challengeResult = bytestream.readByte();
 
 				if (challengeResult == 1) {
@@ -218,7 +228,12 @@ public class Client extends Thread {
 		} else {
 			try {
 				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-				byte sessionIdFromServer = bytestream.readByte(); //FIXME: We should be checking these every message
+				byte sessionIdFromServer = bytestream.readByte();
+				if (sessionIdFromServer != sessionId) {
+					logger.log(Level.SEVERE, "Session ID mismatch! Client id: {0}, Server id: {1}", new Object[]{sessionId, sessionIdFromServer});
+					return;  // stop processing this message
+				}
+				
 				int errorCode = bytestream.readInt();
 				logger.log(Level.WARNING, "Authentication Error: {0}", errorCode);
 			} catch (IOException ex) {
@@ -236,9 +251,10 @@ public class Client extends Thread {
 				logger.log(Level.INFO, "In acceptingStream");
 				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
 				byte sessionIdFromServer = bytestream.readByte();
-
+				
 				if (sessionIdFromServer != sessionId) {
 					logger.log(Level.SEVERE, "Session ID mismatch! Client id: {0}, Server id: {1}", new Object[]{sessionId, sessionIdFromServer});
+					return;  // stop processing this message
 				}
 
 				// Decompose incoming stream message
@@ -297,7 +313,12 @@ public class Client extends Thread {
 		} else {
 			try {
 				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
-				byte sessionId = bytestream.readByte();
+				byte sessionIdFromServer = bytestream.readByte();
+				if (sessionIdFromServer != sessionId) {
+					logger.log(Level.SEVERE, "Session ID mismatch! Client id: {0}, Server id: {1}", new Object[]{sessionId, sessionIdFromServer});
+					return;  // stop processing this message
+				}
+				
 				int errorCode = bytestream.readInt();
 
 				logger.log(Level.WARNING, "Stream Error: {0}", errorCode);
