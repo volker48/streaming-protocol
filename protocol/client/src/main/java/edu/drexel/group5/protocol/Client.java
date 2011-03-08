@@ -44,13 +44,8 @@ public class Client extends Thread {
 	private String streamType;
 	private edu.drexel.group5.State state;
 	private int challengeValue;
-	// Playback data members
-	private final SourceDataLine audioLine;
-	private final float sampleRate;
-	private final int sampleSizeInBits;
-	private final int channels;
-	private final boolean audioSigned;
-	private final boolean bigEndian;
+	private SourceDataLine audioLine;
+	private int curSeqNum = -1;
 
 	public Client(InetAddress serverAddress, int serverPort, String password) {
 		super("Streaming Protocol Client");
@@ -67,6 +62,29 @@ public class Client extends Thread {
 			throw new RuntimeException("Could not obtain the hash algoritm", ex);
 		}
 
+		AudioFormat.Encoding encoding = AudioFormat.Encoding.PCM_SIGNED;
+		float sampleRate = 11025;
+		int sampleSizeInBits = 16;
+		int channels = 1;
+		int frameSize = 2;
+		float frameRate = 11025;
+		boolean bigEndian = false;
+		try
+		{
+			AudioFormat format = new AudioFormat(encoding, sampleRate, sampleSizeInBits, channels, frameSize, frameRate, bigEndian);
+			SourceDataLine.Info info = new DataLine.Info(SourceDataLine.class, format,5000);
+			audioLine = (SourceDataLine)AudioSystem.getLine(info);
+			
+			logger.log(Level.INFO, "Now ready to play back audio when received.");
+		}
+		catch (LineUnavailableException ex)
+		{
+			throw new RuntimeException("Could not create an open audio line due to no line being available.", ex);
+		}
+		
+		//	throw new RuntimeException("Could not create an open audio line due to an unknown error.", ex);
+
+
 		try {
 			this.socket = new DatagramSocket();
 			socket.setSoTimeout(SOCKET_TIMEOUT);
@@ -74,10 +92,9 @@ public class Client extends Thread {
 			throw new RuntimeException("Could not create a ClientSocket", ex);
 		}
 
-
 		this.state = edu.drexel.group5.State.DISCONNECTED;
 	}
-
+/*
     public void parseAudioFormat(String streamType) {
         // parse stream type (not too robust, oh well)
         // example: PCM_SIGNED 8000.0 Hz, 16 bit, stereo, 4 bytes/frame, little-endian
@@ -121,6 +138,7 @@ public class Client extends Thread {
             bigEndian = true;
         }
     }
+	*/
 
 	public void acceptSession(byte[] buffer) {
 		logger.log(Level.INFO, "Received SESSION Message");
@@ -139,8 +157,17 @@ public class Client extends Thread {
                     
 
 		        try {
-			        AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
-			        DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
+ 					
+					AudioFormat.Encoding encoding = AudioFormat.Encoding.PCM_SIGNED;
+					float sampleRate = 11025;
+					int sampleSizeInBits = 16;
+					int channels = 1;
+					int frameSize = 2;
+					float frameRate = 11025;
+					boolean bigEndian = false;
+	
+			        AudioFormat format = new AudioFormat(encoding, sampleRate, sampleSizeInBits, channels, frameSize, frameRate, bigEndian);
+			        SourceDataLine.Info info = new DataLine.Info(SourceDataLine.class, format, 65000);
 			        audioLine = (SourceDataLine) AudioSystem.getLine(info);
 			        audioLine.open(format);
 			        audioLine.start();
@@ -238,7 +265,8 @@ public class Client extends Thread {
 		} else {
 			try {
 				logger.log(Level.INFO, "In acceptingStream");
-				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, BUFFER_LENGTH - 1));
+				DataInputStream bytestream = new DataInputStream(new ByteArrayInputStream(buffer, 1, buffer.length));
+				logger.log(Level.INFO, "Incoming stream buffer length = {0}", buffer.length);
 				byte sessionIdFromServer = bytestream.readByte();
 
 				if (sessionIdFromServer != sessionId) {
@@ -246,26 +274,43 @@ public class Client extends Thread {
 				}
 
 				// Decompose incoming stream message
-				byte seqNum = bytestream.readByte();
+				int seqNum = bytestream.readInt();
 				int datalen = bytestream.readInt();  
+				logger.log(Level.INFO, "Stream Message Details [SESSID:{0},SEQNUM:{1},DATALEN:{2}]",new Object[]{sessionIdFromServer, seqNum, datalen});
+				
 				byte data[] = new byte[datalen];
 				bytestream.readFully(data, 0, datalen);
+				
+				// Handle CRC
 				int crcLength = bytestream.readInt();
 				byte[] crcFromServer = new byte[crcLength];
 				bytestream.readFully(crcFromServer, 0, crcLength);
-				// compute CRC and check it
 				byte[] computed_crc = digest.digest(data);
 				if (!Arrays.equals(computed_crc, crcFromServer)) {
 					logger.log(Level.SEVERE, "Data from server did not pass CRC!"); //FIXME: Not really sure what we should do here
 				}
 
-				// TODO: compare sequence numbers
+				// Compare sequence numbers
+				curSeqNum++;
+				if (curSeqNum == seqNum)
+				{
+					// We have received the next sequence number expected
+					logger.log(Level.INFO, "Valid sequencing: SeqNum expected={0}, SeqNum received={1}", new Object[]{curSeqNum, seqNum});
+				}
+				else
+				{	
+					// We did not receive the sequence number expected, probably due to lag
+					logger.log(Level.INFO, "Invalid sequencing: SeqNum expected={0}, SeqNum received={1}. Missed {2} packets.", new Object[]{curSeqNum, seqNum, (seqNum-curSeqNum)});
+					
+					// Rather than stop playing the audio, probably better to throw out the missed frame and move on.
+					// A good way to fix the lag is to slow the message rate.
+					// Reset the sequence number we are expecting.
+					curSeqNum = seqNum;
+				}
 
+				
 				// Place received buffer into pre-configured, open audio playback buffer
-				// TODO: It might be better to pass the audio format information in the StreamMessage
-				logger.log(Level.INFO, "Writing to audio line");
 				audioLine.write(data, 0, datalen);
-
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Problem?", ex);
 
