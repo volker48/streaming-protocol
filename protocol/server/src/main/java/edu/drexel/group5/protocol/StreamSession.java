@@ -4,7 +4,6 @@ import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -103,19 +102,10 @@ public class StreamSession implements Runnable {
 			shutdownSession();
 		}
 		state = state.AUTHENTICATING;
-		final MessageDigest md;
-		try {
-			md = MessageDigest.getInstance("SHA-1");
-		} catch (NoSuchAlgorithmException ex) {
-			throw new RuntimeException("SHA-1 is not available on this system!", ex);
-		}
-		md.update(factory.intToByteArray(challengeValue));
-		md.update(PASSWORD.getBytes());
-		byte[] serverCalculatedHash = md.digest();
-		final String serverHash = StringUtils.getHexString(serverCalculatedHash);
-		logger.log(Level.INFO, "Server Hash: {0}", serverHash);
-		int counter = authenticate(serverCalculatedHash);
-		if (counter == MAX_AUTH_RETRY) {
+		byte[] serverCalculatedHash = calculateHash(challengeValue, PASSWORD);
+		logger.log(Level.INFO, "Server Hash: {0}", StringUtils.getHexString(serverCalculatedHash));
+		boolean authSuccessful = authenticate(serverCalculatedHash);
+		if (!authSuccessful) {
 			state = State.DISCONNECTED;
 			try {
 				socket.send(factory.createAuthenticationError(sessionId, MAX_RETRY_ERROR));
@@ -128,7 +118,19 @@ public class StreamSession implements Runnable {
 		}
 	}
 
-	private int authenticate(byte[] serverCalculatedHash) {
+	private byte[] calculateHash(int challengeValue, String secret) {
+		final MessageDigest md;
+		try {
+			md = MessageDigest.getInstance("SHA-1");
+		} catch (NoSuchAlgorithmException ex) {
+			throw new RuntimeException("SHA-1 is not available on this system!", ex);
+		}
+		md.update(factory.intToByteArray(challengeValue));
+		md.update(secret.getBytes());
+		return md.digest();
+	}
+
+	private boolean authenticate(byte[] serverCalculatedHash) {
 		int counter = 0;
 		logger.log(Level.INFO, "Counter: {0}, State: {1}", new Object[]{counter, state});
 		while (counter < MAX_AUTH_RETRY) {
@@ -138,7 +140,7 @@ public class StreamSession implements Runnable {
 				challengeResponse = packetQueue.take();
 			} catch (InterruptedException ex) {
 				shutdownSession();
-				return -1;
+				return false;
 			}
 			logger.log(Level.INFO, "Received a message from the client checking the message...");
 			final byte[] data = challengeResponse.getData();
@@ -159,25 +161,24 @@ public class StreamSession implements Runnable {
 				int lengthOfHash = input.readInt();
 				final byte[] responseHash = new byte[lengthOfHash];
 				input.read(responseHash, 0, lengthOfHash);
-				String clientHash = StringUtils.getHexString(responseHash);
-				logger.log(Level.INFO, "Client hash is: {0}", clientHash);
+				logger.log(Level.INFO, "Client hash is: {0}", StringUtils.getHexString(responseHash));
 				if (!Arrays.equals(responseHash, serverCalculatedHash)) {
 					logger.log(Level.WARNING, "Client did not authenticate!");
-					socket.send(factory.createChallengeResult(sessionId, (byte) 0));
+					int newChallenge = rand.nextInt();
+					serverCalculatedHash = calculateHash(newChallenge, PASSWORD);
+					socket.send(factory.createRechallengeMessage(sessionId, newChallenge));
 					counter++;
 				} else {
 					logger.log(Level.INFO, "Hashes match, transitioning to streaming state");
 					state = State.STREAMING;
-					socket.send(factory.createChallengeResult(sessionId, (byte) 1));
-					logger.log(Level.INFO, "Challenge result sent to client");
 					startStreaming();
-					return counter;
+					return true;
 				}
 			} catch (IOException ex) {
 				shutdownSession();
 			}
 		}
-		return counter;
+		return false;
 	}
 
 	private void shutdownSession() {

@@ -10,6 +10,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -49,7 +50,8 @@ public class PacketFactory {
 	}
 
 	/**
-	 *
+	 * Creates a SessionMessage suitable for sending to the client from the
+	 * server after the server receives the SessionRequest.
 	 * @param sessionId the id of the session.
 	 * @param version the protocol version.
 	 * @param format the String name of the stream format. Must be less than 256 characters.
@@ -105,11 +107,11 @@ public class PacketFactory {
 		return new DatagramPacket(data, data.length, destination);
 	}
 
-	public DatagramPacket createChallengeResult(byte sessionId, byte result) throws SocketException {
-		final byte[] data = new byte[3];
-		data[0] = MessageType.CHALLENGE_RESULT.getMessageId();
-		data[1] = sessionId;
-		data[2] = result;
+	public DatagramPacket createRechallengeMessage(byte sessionId, int challengeValue) throws SocketException {
+		final byte[] data = new byte[5]; //1 for sessionId 4 fo challengeValue
+		final ByteBuffer buffer = ByteBuffer.wrap(data);
+		buffer.put(sessionId);
+		buffer.putInt(challengeValue);
 		return new DatagramPacket(data, data.length, destination);
 	}
 

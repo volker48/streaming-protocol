@@ -34,8 +34,6 @@ public class Client extends Thread {
 	private static final int SOCKET_TIMEOUT = 5000;
 	private static final byte CLIENT_VERSION = 1;
 	private ObjectInputStream objectIn;
-	private final InetAddress serverAddress;
-	private final int serverPort;
 	private final String password;
 	private final DatagramSocket socket;
 	private final PacketFactory packetFactory;
@@ -45,19 +43,17 @@ public class Client extends Thread {
 	private edu.drexel.group5.State state;
 	private int challengeValue;
 	// Playback data members
-	private final SourceDataLine audioLine;
-	private final float sampleRate;
-	private final int sampleSizeInBits;
-	private final int channels;
-	private final boolean audioSigned;
-	private final boolean bigEndian;
+	private SourceDataLine audioLine;
+	private float sampleRate;
+	private int sampleSizeInBits;
+	private int channels;
+	private boolean audioSigned;
+	private boolean bigEndian;
 
 	public Client(InetAddress serverAddress, int serverPort, String password) {
 		super("Streaming Protocol Client");
 		Preconditions.checkArgument(serverPort >= 0 && serverPort <= 65535, serverPort + " is not a valid port");
 		logger.log(Level.INFO, "Stream Client starting");
-		this.serverAddress = serverAddress;
-		this.serverPort = serverPort;
 		this.password = password;
 		this.packetFactory = new PacketFactory(serverPort, serverAddress);
 
@@ -135,8 +131,6 @@ public class Client extends Thread {
 				byte[] typestringbyte = new byte[typelen];
 				bytestream.readFully(typestringbyte, 0, typelen);
 				streamType = new String(typestringbyte);
-
-                    
 
 		        try {
 			        AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
