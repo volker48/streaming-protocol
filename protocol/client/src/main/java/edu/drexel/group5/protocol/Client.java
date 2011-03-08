@@ -132,6 +132,7 @@ public class Client extends Thread {
 				byte[] typestringbyte = new byte[typelen];
 				bytestream.readFully(typestringbyte, 0, typelen);
 				streamType = new String(typestringbyte);
+                parseAudioFormat(streamType);
 
 				try {
 					AudioFormat format = new AudioFormat(sampleRate, sampleSizeInBits, channels, audioSigned, bigEndian);
