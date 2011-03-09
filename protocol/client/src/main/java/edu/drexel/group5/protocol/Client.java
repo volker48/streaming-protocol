@@ -44,7 +44,6 @@ public class Client extends Thread {
 	private Thread playerThread;
 	private boolean isPaused = false;
 	private InputStreamReader reader;
-	// Playback data members
 
 	public Client(InetAddress serverAddress, int serverPort, String password) {
 		super("Streaming Protocol Client");
@@ -292,6 +291,16 @@ public class Client extends Thread {
 					socket.send(packetFactory.createPauseMessage(sessionId, isPaused));
 					logger.log(Level.INFO, "Sent Pause Message");
 				}
+				/*
+				else if (input == '+') {
+					socket.send(packetFactory.createThrottleMessage(sessionId, 10240)); // Increase by 10kB/sec
+					logger.log(Level.INFO, "Send Throttle Message, increased rate by 10kB/sec");
+				}
+				else if (input == '-') {
+					socket.send(packetFactory.createThrottleMessage(sessionId, -10240)); // Decrease by 10kB/sec
+					logger.log(Level.INFO, "Send Throttle Message, decreased rate by 10kB/sec");
+				}
+				*/
 			}
 		} catch (IOException e) {
 			logger.log(Level.WARNING, "Error reading from input!", e);
