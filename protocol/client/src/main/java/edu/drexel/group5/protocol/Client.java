@@ -3,6 +3,7 @@ package edu.drexel.group5.protocol;
 import edu.drexel.group5.common.MessageType;
 import edu.drexel.group5.common.PacketFactory;
 import edu.drexel.group5.protocol.ServerFinder.ServerInfo;
+import java.io.BufferedReader;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -37,13 +38,13 @@ public class Client extends Thread {
 	private final PacketFactory packetFactory;
 	private final MessageDigest md5;
 	private byte sessionId;
-	private edu.drexel.group5.common.State state;
+	private edu.drexel.group5.common.ProtocolState state;
 	private int challengeValue;
 	private StreamPlayer player;
 	private final LinkedBlockingQueue<ByteBuffer> dataQueue;
 	private Thread playerThread;
 	private boolean isPaused = false;
-	private InputStreamReader reader;
+	
 
 	public Client(ServerInfo info, String password) {
 		super("Streaming Protocol Client");
@@ -64,7 +65,7 @@ public class Client extends Thread {
 			throw new RuntimeException("Could not create a ClientSocket", ex);
 		}
 		this.dataQueue = new LinkedBlockingQueue<ByteBuffer>();
-		this.state = edu.drexel.group5.common.State.DISCONNECTED;
+		this.state = edu.drexel.group5.common.ProtocolState.DISCONNECTED;
 
 		// Send initial session request message to server
 		sendSessionRequest();
@@ -72,7 +73,7 @@ public class Client extends Thread {
 
 	public void acceptSession(byte[] buffer) throws IOException {
 		logger.log(Level.INFO, "Received SESSION Message");
-		if (state != edu.drexel.group5.common.State.CONNECTING) {
+		if (state != edu.drexel.group5.common.ProtocolState.CONNECTING) {
 			logger.log(Level.WARNING, "Received SESSION - not in CONNECTING state");
 			return;
 		}
@@ -96,7 +97,7 @@ public class Client extends Thread {
 		logger.log(Level.FINE, "Challenge Value from server: {0}", challengeValue);
 		socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
 		logger.log(Level.FINE, "Challenge response sent!");
-		state = edu.drexel.group5.common.State.AUTHENTICATING;
+		state = edu.drexel.group5.common.ProtocolState.AUTHENTICATING;
 	}
 
 	private AudioFormat getAudioFormatFromStream(DataInputStream bytestream) throws IOException {
@@ -110,7 +111,7 @@ public class Client extends Thread {
 
 	public void acceptReChallenge(byte[] buffer) throws IOException {
 		logger.log(Level.FINE, "Received CHALLENGE RESULT Message");
-		if (state != edu.drexel.group5.common.State.AUTHENTICATING) {
+		if (state != edu.drexel.group5.common.ProtocolState.AUTHENTICATING) {
 			logger.log(Level.WARNING, "Received CHALLENGE_RESULT - not in AUTHENTICATING state");
 			return;
 		}
@@ -128,7 +129,7 @@ public class Client extends Thread {
 
 	public void acceptAuthenticationError(byte[] buffer) throws IOException {
 		logger.log(Level.FINE, "Received AUTH ERROR Message");
-		if (state != edu.drexel.group5.common.State.AUTHENTICATING) {
+		if (state != edu.drexel.group5.common.ProtocolState.AUTHENTICATING) {
 			logger.log(Level.WARNING, "Received AUTHENTICATION_ERROR - not in AUTHENTICATING state");
 			return;
 		}
@@ -145,11 +146,11 @@ public class Client extends Thread {
 
 	public void acceptStream(byte[] buffer) {
 		logger.log(Level.FINEST, "Received STREAM Message");
-		if (state == edu.drexel.group5.common.State.AUTHENTICATING) {
-			state = edu.drexel.group5.common.State.STREAMING;
+		if (state == edu.drexel.group5.common.ProtocolState.AUTHENTICATING) {
+			state = edu.drexel.group5.common.ProtocolState.STREAMING;
 			playerThread.start();
 		}
-		if (state != edu.drexel.group5.common.State.STREAMING) {
+		if (state != edu.drexel.group5.common.ProtocolState.STREAMING) {
 			logger.log(Level.WARNING, "Received STREAM - not in STREAMING state");
 			return;
 		}
@@ -163,7 +164,7 @@ public class Client extends Thread {
 
 	public void acceptStreamError(byte[] buffer) throws IOException {
 		logger.log(Level.FINE, "Received STREAM ERROR Message");
-		if (state != edu.drexel.group5.common.State.STREAMING) {
+		if (state != edu.drexel.group5.common.ProtocolState.STREAMING) {
 			logger.log(Level.WARNING, "Received STREAM_ERROR - not in STREAMING state");
 			return;
 		}
@@ -187,7 +188,7 @@ public class Client extends Thread {
 		logger.log(Level.FINE, "In timeoutDisconnected");
 		try {
 			this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
-			this.state = edu.drexel.group5.common.State.CONNECTING;
+			this.state = edu.drexel.group5.common.ProtocolState.CONNECTING;
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not send session request", ex);
 		}
@@ -197,7 +198,7 @@ public class Client extends Thread {
 		logger.log(Level.FINE, "Sending SessionRequest!");
 		try {
 			this.socket.send(packetFactory.createSessionRequest(CLIENT_VERSION));
-			this.state = edu.drexel.group5.common.State.CONNECTING;
+			this.state = edu.drexel.group5.common.ProtocolState.CONNECTING;
 		} catch (IOException ex) {
 			throw new RuntimeException("Could not send session request", ex);
 		}
@@ -220,6 +221,9 @@ public class Client extends Thread {
 		// nothing to do here really
 	}
 
+	/**
+	 * This method is the heart of the client.
+	 */
 	@Override
 	public void run() {
 		sendSessionRequest();
@@ -228,7 +232,6 @@ public class Client extends Thread {
 				final byte[] buffer = new byte[BUFFER_LENGTH];
 				final DatagramPacket packet = new DatagramPacket(buffer, BUFFER_LENGTH);
 				socket.receive(packet);
-
 				// handle the received message
 				MessageType message = MessageType.getMessageTypeFromId(buffer[0]);
 				logger.log(Level.FINEST, "Rcved packet of MessageType: {0}", message);
@@ -254,7 +257,8 @@ public class Client extends Thread {
 						logger.log(Level.WARNING, "Received an unexpected message: {0} dropping the packet", message);
 				}
 			} catch (SocketTimeoutException ex) {
-				// if the socket times out, we may need to resend the last message to the server
+				// if the socket times out, we may need to resend the 
+				//last message to the server depending on the current state
 				switch (state) {
 					case DISCONNECTED:
 						timeoutDisconnected();
@@ -280,28 +284,35 @@ public class Client extends Thread {
 
 	private void checkConsole() {
 		// Check system input for a pause command
-		char input;
-		reader = new InputStreamReader(System.in);
+		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 		try {
 			if (reader.ready()) {
-				input = (char) reader.read();
-				if (input == 'p' || input == 'P') {
+				String input = reader.readLine();
+				if (input == null) {
+					return;
+				}
+				if ("p".equals(input.toLowerCase())) {
 					isPaused = !isPaused;
 					socket.send(packetFactory.createPauseMessage(sessionId, isPaused));
 					logger.log(Level.FINE, "Sent Pause Message");
 				}
-				if (input == '+') {
-					socket.send(packetFactory.createThrottleMessage(sessionId, 10240)); // Increase by 10kB/sec
+				if ("+".equals(input)) {
+					socket.send(packetFactory.createThrottleMessage(sessionId, 1024)); // Increase by 1kB/sec
 					logger.log(Level.FINE, "Send Throttle Message, increased rate by 10kB/sec");
 				}
-				if (input == '-') {
-					socket.send(packetFactory.createThrottleMessage(sessionId, -10240)); // Decrease by 10kB/sec
+				if ("-".equals(input)) {
+					socket.send(packetFactory.createThrottleMessage(sessionId, -1024)); // Decrease by 1kB/sec
 					logger.log(Level.FINE, "Send Throttle Message, decreased rate by 10kB/sec");
 				}
-
 			}
 		} catch (IOException e) {
 			logger.log(Level.WARNING, "Error reading from input!", e);
+		} finally {
+			try {
+				reader.close();
+			} catch (IOException ex) {
+				logger.log(Level.SEVERE, "Could not close the input stream reader!", ex);
+			}
 		}
 	}
 

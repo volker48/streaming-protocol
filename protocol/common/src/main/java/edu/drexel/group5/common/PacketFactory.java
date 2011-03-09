@@ -17,7 +17,7 @@ import java.security.NoSuchAlgorithmException;
 import javax.sound.sampled.*;
 
 /**
- *
+ * Factory class used for creating the messages of the protocol.
  * @author Marcus McCurdy <marcus@drexel.edu>
  */
 public class PacketFactory {
@@ -44,6 +44,13 @@ public class PacketFactory {
 		}
 	}
 
+	/**
+	 * Creates a SessionRequestMessage
+	 * @param protocolVersion the byte version of the protocol the client is
+	 * running.
+	 * @return a DatagramPacket that represents a ERP SessionRequestMessage
+	 * @throws SocketException
+	 */
 	public DatagramPacket createSessionRequest(byte protocolVersion) throws SocketException {
 		final byte[] data = new byte[]{MessageType.SESSION_REQUEST.getMessageId(), protocolVersion};
 		return new DatagramPacket(data, data.length, destination);
@@ -101,6 +108,14 @@ public class PacketFactory {
 		return new DatagramPacket(data, data.length, destination);
 	}
 
+	/**
+	 * Creates a RechallengeMessages. This messages is sent to the client when
+	 * it fails authentication.
+	 * @param sessionId the byte sessionId of the recipient
+	 * @param challengeValue the new int challengeValue
+	 * @return a DatagramPacket that represents an ERP RechallengeMessage
+	 * @throws SocketException
+	 */
 	public DatagramPacket createRechallengeMessage(byte sessionId, int challengeValue) throws SocketException {
 		final byte[] data = new byte[6]; //1 for message type, 1 for sessionId 4 fo challengeValue
 		final ByteBuffer buffer = ByteBuffer.wrap(data);
@@ -134,6 +149,15 @@ public class PacketFactory {
 		return new DatagramPacket(data, data.length, destination);
 	}
 
+	/**
+	 * Message sent to the client when it fails authentication an implementation
+	 * dependent number of times.
+	 * @param sessionId the byte sessionId of the recipient
+	 * @param errorCode the int errorCode of why the authentication failed.
+	 * @return a DatagramPacket representing an authentication error message.
+	 * @throws SocketException
+	 * @throws IOException
+	 */
 	public DatagramPacket createAuthenticationError(byte sessionId, int errorCode) throws SocketException, IOException {
 		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		baos.write(sessionId);
@@ -156,7 +180,14 @@ public class PacketFactory {
 		final byte[] outputData = bytesOut.toByteArray();
 		return new DatagramPacket(outputData, outputData.length, destination);
 	}
-	
+
+	/**
+	 * Creates a pause message.
+	 * @param sessionId the recipients sessionId
+	 * @param isPaused true if the streaming should be paused, false otherwise
+	 * @return a DatagramPacket representing a pause message.
+	 * @throws SocketException
+	 */
 	public DatagramPacket createPauseMessage(byte sessionId, boolean isPaused) throws SocketException {
 		final byte[] data = new byte[]{MessageType.PAUSE.getMessageId(), sessionId, isPaused ? (byte)1 : (byte)0};		
 		return new DatagramPacket(data, data.length, destination);

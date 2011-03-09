@@ -16,7 +16,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import edu.drexel.group5.common.PacketFactory;
-import edu.drexel.group5.common.State;
+import edu.drexel.group5.common.ProtocolState;
 import edu.drexel.group5.common.StringUtils;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
@@ -41,7 +41,7 @@ public class StreamSession implements Runnable {
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
 	private final DatagramSocket socket;
 	private final byte sessionId;
-	private State state = State.DISCONNECTED;
+	private ProtocolState state = ProtocolState.DISCONNECTED;
 	private static final int MAX_AUTH_RETRY = 5;
 	private static final int MAX_RETRY_ERROR = 1;
 	private final PacketFactory factory;
@@ -74,7 +74,7 @@ public class StreamSession implements Runnable {
 		this.sessionId = sessionId;
 		this.sessionRequest = sessionRequest;
 		this.format = format;
-		state = State.CONNECTING;
+		state = ProtocolState.CONNECTING;
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
 	}
 
@@ -82,7 +82,7 @@ public class StreamSession implements Runnable {
 	public void run() {
 		logger.log(Level.INFO, "Streaming Session: {0} starting...", sessionId);
 		handleSessionRequest(sessionRequest);
-		while (!Thread.currentThread().isInterrupted() && state != State.DISCONNECTED) {
+		while (!Thread.currentThread().isInterrupted() && state != ProtocolState.DISCONNECTED) {
 			final DatagramPacket packet;
 			try {
 				logger.log(Level.INFO, "Waiting for packets from client...");
@@ -126,7 +126,7 @@ public class StreamSession implements Runnable {
 		logger.log(Level.INFO, "Server Hash: {0}", StringUtils.getHexString(serverCalculatedHash));
 		boolean authSuccessful = authenticate(serverCalculatedHash);
 		if (!authSuccessful) {
-			state = State.DISCONNECTED;
+			state = ProtocolState.DISCONNECTED;
 			try {
 				socket.send(factory.createAuthenticationError(sessionId, MAX_RETRY_ERROR));
 			} catch (IOException ex) {
@@ -196,7 +196,7 @@ public class StreamSession implements Runnable {
 					counter++;
 				} else {
 					logger.log(Level.INFO, "Hashes match, transitioning to streaming state");
-					state = State.STREAMING;
+					state = ProtocolState.STREAMING;
 					startStreaming();
 					return true;
 				}
