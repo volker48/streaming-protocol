@@ -32,7 +32,6 @@ public class Client extends Thread {
 	private static final int BUFFER_LENGTH = 4096;
 	private static final int SOCKET_TIMEOUT = 5000;
 	private static final byte CLIENT_VERSION = 1;
-	private ObjectInputStream objectIn;
 	private final String password;
 	private final DatagramSocket socket;
 	private final PacketFactory packetFactory;

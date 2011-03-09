@@ -1,5 +1,6 @@
 package edu.drexel.group5.protocol;
 
+import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
@@ -25,6 +26,7 @@ public class StreamPlayer implements Runnable {
 	private int curSeqNum = -1;
 	private SourceDataLine audioLine;
 	private final MessageDigest md5;
+	private Mixer supportedMixer = null;
 
 	public StreamPlayer(LinkedBlockingQueue<ByteBuffer> dataQueue, AudioFormat format, MessageDigest md5) {
 		this.dataQueue = dataQueue;
@@ -43,7 +45,6 @@ public class StreamPlayer implements Runnable {
 				logger.log(Level.INFO, "Stream player shutting down...");
 				Thread.currentThread().interrupt();
 			}
-
 			// Decompose incoming stream message
 			buffer.position(1);//skip the MessageType byte
 			byte sessionIdFromServer = buffer.get();
@@ -54,7 +55,7 @@ public class StreamPlayer implements Runnable {
 			int crcLength = buffer.getInt();
 			byte[] crc = new byte[crcLength];
 			buffer.get(crc, 0, crcLength);
-			logger.log(Level.INFO, "Stream Message Details [SESSID:{0},SEQNUM:{1},DATALEN:{2}]", new Object[]{sessionIdFromServer, seqNum, datalen});
+			logger.log(Level.FINEST, "Stream Message Details [SESSID:{0},SEQNUM:{1},DATALEN:{2}]", new Object[]{sessionIdFromServer, seqNum, datalen});
 
 			curSeqNum++;
 
@@ -79,12 +80,8 @@ public class StreamPlayer implements Runnable {
 				// Reset the sequence number we are expecting.
 				curSeqNum = seqNum;
 			}
-
-
 			// Place received buffer into pre-configured, open audio playback buffer
-			// TODO: It might be better to pass the audio format information in the StreamMessage
-			logger.log(Level.INFO, "Writing to audio line");
-			int bytesAvailable = audioLine.available();
+			logger.log(Level.INFO, "Writing to audio line, available {0}", audioLine.available());
 			audioLine.write(audio, 0, datalen);
 		}
 	}
@@ -92,19 +89,22 @@ public class StreamPlayer implements Runnable {
 	private void openAudioLine() {
 		logger.log(Level.INFO, "Opening SourceDataLine...");
 		logger.log(Level.INFO, "Audio Format: {0}", format);
-		Mixer javaMixer = null;
-		for (Mixer.Info info : AudioSystem.getMixerInfo()) {
-			if (info.getName().toLowerCase().contains("java")) {
-				javaMixer = AudioSystem.getMixer(info);
-				break;
-			}
-		}
-		if (javaMixer == null) {
-			throw new RuntimeException("No suitable mixer found!");
-		}
 		try {
-			DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
-			audioLine = (SourceDataLine) javaMixer.getLine(info);
+			DataLine.Info lineInfo = new DataLine.Info(SourceDataLine.class, format);
+			for (Mixer.Info info : AudioSystem.getMixerInfo()) {
+				Mixer mixer = AudioSystem.getMixer(info);
+				System.out.println("Checking Mixer " + info);
+				mixer.open();
+				if (mixer.isLineSupported(lineInfo)) {
+					supportedMixer = mixer;
+					break;
+				}
+				mixer.close();
+			}
+			if (supportedMixer == null) {
+				throw new RuntimeException("A suitable mixer could not be found!");
+			}
+			audioLine = (SourceDataLine) supportedMixer.getLine(lineInfo);
 			audioLine.open(format);
 			audioLine.start();
 
