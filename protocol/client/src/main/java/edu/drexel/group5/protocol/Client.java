@@ -30,6 +30,7 @@ import javax.sound.sampled.AudioFormat;
 public class Client extends Thread {
 
 	private static final Logger logger = Logger.getLogger(Client.class.getName());
+	private static final int DEFAULT_PORT = 32456;
 	private static final int BUFFER_LENGTH = 4096;
 	private static final int SOCKET_TIMEOUT = 5000;
 	private static final byte CLIENT_VERSION = 1;
@@ -44,11 +45,11 @@ public class Client extends Thread {
 	private final LinkedBlockingQueue<ByteBuffer> dataQueue;
 	private Thread playerThread;
 	private boolean isPaused = false;
-	
+	private final BufferedReader reader;
 
 	public Client(ServerInfo info, String password) {
 		super("Streaming Protocol Client");
-		
+		reader = new BufferedReader(new InputStreamReader(System.in));
 		logger.log(Level.INFO, "ERP Client starting");
 		this.password = password;
 		this.packetFactory = new PacketFactory(info.port, info.ip);
@@ -227,6 +228,11 @@ public class Client extends Thread {
 	@Override
 	public void run() {
 		sendSessionRequest();
+		System.out.println("Client controls: ");
+		System.out.println("p pauses the stream");
+		System.out.println("+ increases stream speed by 1 kBps");
+		System.out.println("- decreases stream speed by 1 kBps");
+		System.out.println("d disconnects from the server");
 		while (!isInterrupted()) {
 			try {
 				final byte[] buffer = new byte[BUFFER_LENGTH];
@@ -280,39 +286,42 @@ public class Client extends Thread {
 			}
 			checkConsole();
 		}
+		System.out.println("Disconnecting...");
+		playerThread.interrupt();
+		try {
+			reader.close();
+		} catch (IOException ex) {
+			logger.log(Level.SEVERE, null, ex);
+		}
+		socket.close();
 	}
 
 	private void checkConsole() {
 		// Check system input for a pause command
-		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+
 		try {
 			if (reader.ready()) {
-				String input = reader.readLine();
-				if (input == null) {
-					return;
-				}
-				if ("p".equals(input.toLowerCase())) {
+				char input = (char) reader.read();
+				if ('p' == Character.toLowerCase(input)) {
 					isPaused = !isPaused;
 					socket.send(packetFactory.createPauseMessage(sessionId, isPaused));
 					logger.log(Level.FINE, "Sent Pause Message");
 				}
-				if ("+".equals(input)) {
+				if ('+' == input) {
 					socket.send(packetFactory.createThrottleMessage(sessionId, 1024)); // Increase by 1kB/sec
 					logger.log(Level.FINE, "Send Throttle Message, increased rate by 10kB/sec");
 				}
-				if ("-".equals(input)) {
+				if ('-' == input) {
 					socket.send(packetFactory.createThrottleMessage(sessionId, -1024)); // Decrease by 1kB/sec
 					logger.log(Level.FINE, "Send Throttle Message, decreased rate by 10kB/sec");
+				}
+				if ('d' == Character.toLowerCase(input)) {
+					socket.send(packetFactory.createDisconnectMessage(sessionId));
+					interrupt();
 				}
 			}
 		} catch (IOException e) {
 			logger.log(Level.WARNING, "Error reading from input!", e);
-		} finally {
-			try {
-				reader.close();
-			} catch (IOException ex) {
-				logger.log(Level.SEVERE, "Could not close the input stream reader!", ex);
-			}
 		}
 	}
 
@@ -339,8 +348,11 @@ public class Client extends Thread {
 				logger.log(Level.SEVERE, "Unknown server", ex);
 				System.exit(1);
 			}
-			info = new ServerInfo(Integer.parseInt(args[1]), serverAddress);
+			info = new ServerInfo(DEFAULT_PORT, serverAddress);
 			client = new Client(info, "CS544GROUP5");
+		} else {
+			logger.log(Level.SEVERE, "Invalid number of arguments! Either give no arguments for auto discovery or one argument server ip");
+			System.exit(1);
 		}
 		client.start();
 		try {

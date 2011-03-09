@@ -30,6 +30,14 @@ public class StreamPlayer implements Runnable {
 	private final MessageDigest md5;
 	private Mixer supportedMixer = null;
 
+	/**
+	 * Constructor
+	 * @param dataQueue the LinkedBlockingQueue where the StreamMessages received in the client Thread
+	 * will be placed.
+	 * @param format the AudioFormat that was parsed out of the SessionMessage by the Client.
+	 * @param md5 the MessageDigest instance that uses the MD5 algorithm created
+	 * in the client.
+	 */
 	public StreamPlayer(LinkedBlockingQueue<ByteBuffer> dataQueue, AudioFormat format, MessageDigest md5) {
 		this.dataQueue = dataQueue;
 		this.format = format;

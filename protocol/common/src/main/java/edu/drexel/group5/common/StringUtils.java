@@ -1,37 +1,26 @@
 package edu.drexel.group5.common;
 
-import java.io.UnsupportedEncodingException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
+/**
+ * Utility method to convert a byte array into a String of hex characters. Adapted
+ * from http://rgagnon.com/javadetails/java-0596.html.
+ * @author Marcus McCurdy <marcus@drexel.edu>
+ */
 public class StringUtils {
+
+	private static final String HEXES = "0123456789ABCDEF";
 
 	private StringUtils() {
 		//private constructor should not instantiate this utility class
 	}
 
-	private static final byte[] HEX_CHAR_TABLE = {
-		(byte) '0', (byte) '1', (byte) '2', (byte) '3',
-		(byte) '4', (byte) '5', (byte) '6', (byte) '7',
-		(byte) '8', (byte) '9', (byte) 'a', (byte) 'b',
-		(byte) 'c', (byte) 'd', (byte) 'e', (byte) 'f'
-	};
-
 	public static String getHexString(byte[] raw) {
-		byte[] hex = new byte[2 * raw.length];
-		int index = 0;
-
-		for (byte b : raw) {
-			int v = b & 0xFF;
-			hex[index++] = HEX_CHAR_TABLE[v >>> 4];
-			hex[index++] = HEX_CHAR_TABLE[v & 0xF];
+		if (raw == null) {
+			return null;
 		}
-		String hexString = null;
-		try {
-			hexString = new String(hex, "US-ASCII");
-		} catch (UnsupportedEncodingException ex) {
-			Logger.getLogger(StringUtils.class.getName()).log(Level.SEVERE, "Could not convert bytes to hex string!", ex);
+		final StringBuilder hex = new StringBuilder(2 * raw.length);
+		for (final byte b : raw) {
+			hex.append(HEXES.charAt((b & 0xF0) >> 4)).append(HEXES.charAt((b & 0x0F)));
 		}
-		return hexString == null ? "Coult not convert to hex!" : hexString;
+		return hex.toString();
 	}
 }

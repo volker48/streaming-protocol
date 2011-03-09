@@ -531,6 +531,12 @@ The client will auto discover local servers by sending out a HERP message to the
 times before giving up. When the server receives the HERP message it creates a DERP message that it send back to the address and port that the HERP message was sent from. The client then utilizes the information in the
 HERP message to begin the protocol.
 
+This approach should work as long as the client and server are on the same subnet. It is possible that it will work if they are not, but that would be dependent on whether or not the router on the network will route a
+a UDP packet sent to the broadcast address 255.255.255.255.
+
+\section{Changes from Original Proposal}
+
+
 \section{Group Contribution}
 Everyone in the group contributed to this writeup. Each member contributed one or more states and messages as well as writing sections and subsections of this document. Everyone provided valuable feedback and ideas during this initial design phase of the protocol.
 
