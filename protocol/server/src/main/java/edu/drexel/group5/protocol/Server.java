@@ -24,7 +24,7 @@ import javax.sound.sampled.UnsupportedAudioFileException;
  * @author Marcus McCurdy <marcus@drexel.edu>
  */
 public class Server extends Thread {
-
+	private static final int DEFAULT_PORT = 32456;
 	private static final Logger logger = Logger.getLogger(Server.class.getName());
 	private static final int BUFFER_LENGTH = 128;
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
@@ -65,8 +65,7 @@ public class Server extends Thread {
 	public static void main(String[] args) throws IOException {
 		Handler logFileHandler = new FileHandler("server.log", 8192, 5, true);
 		Logger.getLogger("").addHandler(logFileHandler);
-		Preconditions.checkArgument(args.length == 2, "Invalid number of arguments! Usage: port path-to-file");
-		File audioFile = new File(args[1]);
+		File audioFile = new File(args[0]);
 		Preconditions.checkArgument(audioFile.isFile(), "The argument for the path to the file to stream is not a file!");
 		final AudioFileFormat audioFileFormat;
 
@@ -82,7 +81,15 @@ public class Server extends Thread {
 			return;
 		}
 		AudioFormat format = audioFileFormat.getFormat();
-		Server server = new Server(Integer.parseInt(args[0]), args[1], format);
+		Server server = null;
+		if (args.length == 1) {
+			server = new Server(DEFAULT_PORT, args[0], format);
+		} else if (args.length == 2) {
+			server = new Server(Integer.parseInt(args[1]), args[0], format);
+		} else {
+			logger.log(Level.SEVERE, "Illegal number of arguments given to the server! Start the server with 1 argument path-to-file or 2 arguments path-to-file port");
+			System.exit(1);
+		}
 		server.start();
 		try {
 			server.join();

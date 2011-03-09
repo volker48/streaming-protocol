@@ -1,6 +1,6 @@
 package edu.drexel.group5.protocol;
 
-import edu.drexel.group5.MessageType;
+import edu.drexel.group5.common.MessageType;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.SocketAddress;

@@ -1,7 +1,7 @@
 package edu.drexel.group5.protocol;
 
 import com.google.common.base.Preconditions;
-import edu.drexel.group5.MessageType;
+import edu.drexel.group5.common.MessageType;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -12,16 +12,31 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 /**
- *
+ * This class is used in the auto discovery process. It sends out HERP messages
+ * to the broadcast address at port 65530. It waits 1 second for a reply and
+ * if it does not receive one it will send another HERP message. It will retry
+ * up to 5 times before quitting.
  * @author Marcus McCurdy <marcus@drexel.edu>
  */
 public class ServerFinder {
 
 	private static final int MAX_RETRY = 5;
 
+	/**
+	 * Default no arg constructor.
+	 */
 	public ServerFinder() {
 	}
 
+	/**
+	 * This method does the actual work of broadcasting the HERP and listening
+	 * for the DERP.
+	 * @return the ServerInfo of the replying ERP server of null if no response
+	 * is received.
+	 * @throws SocketException
+	 * @throws UnknownHostException
+	 * @throws IOException
+	 */
 	public ServerInfo findServer() throws SocketException, UnknownHostException, IOException {
 		final DatagramSocket socket = new DatagramSocket();
 		socket.setSoTimeout(1000);
@@ -56,6 +71,10 @@ public class ServerFinder {
 		return new ServerInfo(serverPort, derp.getAddress());
 	}
 
+	/**
+	 * Simply class to wrap the port and InetAddress of the server that is
+	 * responding to the HERP message.
+	 */
 	public static class ServerInfo {
 
 		public final int port;

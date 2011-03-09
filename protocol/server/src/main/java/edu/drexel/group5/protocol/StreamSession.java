@@ -1,7 +1,7 @@
 package edu.drexel.group5.protocol;
 
 import com.google.common.base.Preconditions;
-import edu.drexel.group5.MessageType;
+import edu.drexel.group5.common.MessageType;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -15,9 +15,9 @@ import java.util.Random;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import edu.drexel.group5.PacketFactory;
-import edu.drexel.group5.State;
-import edu.drexel.group5.StringUtils;
+import edu.drexel.group5.common.PacketFactory;
+import edu.drexel.group5.common.State;
+import edu.drexel.group5.common.StringUtils;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.nio.ByteBuffer;
@@ -150,6 +150,12 @@ public class StreamSession implements Runnable {
 		return md.digest();
 	}
 
+	/**
+	 * Processes the clients authentication and handles sending the rechallenge
+	 * message.
+	 * @param serverCalculatedHash
+	 * @return true if the client authenticates, false otherwise.
+	 */
 	private boolean authenticate(byte[] serverCalculatedHash) {
 		int counter = 0;
 		logger.log(Level.INFO, "Counter: {0}, State: {1}", new Object[]{counter, state});

@@ -5,6 +5,7 @@
 
 package edu.drexel.group5;
 
+import edu.drexel.group5.common.StringUtils;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;

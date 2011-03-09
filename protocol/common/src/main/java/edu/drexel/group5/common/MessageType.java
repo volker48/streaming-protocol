@@ -1,7 +1,8 @@
-package edu.drexel.group5;
+package edu.drexel.group5.common;
 
 /**
- *
+ * Enum to hold the types of messages used in the ERP protocol and their
+ * byte message id.
  * @author Marcus McCurdy <marcus@drexel.edu>
  */
 public enum MessageType {

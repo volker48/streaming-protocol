@@ -1,6 +1,5 @@
 package edu.drexel.group5.protocol;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
@@ -15,7 +14,10 @@ import javax.sound.sampled.Mixer;
 import javax.sound.sampled.SourceDataLine;
 
 /**
- *
+ * Class responsible for feeding the AudioLine with the Streaming data from the
+ * server. It is designed to be run in a Thread separate from the main Client
+ * Thread because writing to the Line may block, which would cause the client
+ * to be unable to receive additional streaming data.
  * @author Marcus McCurdy <marcus@drexel.edu>
  */
 public class StreamPlayer implements Runnable {
@@ -70,10 +72,10 @@ public class StreamPlayer implements Runnable {
 			// Compare sequence numbers
 			if (curSeqNum == seqNum) {
 				// We have received the next sequence number expected
-				logger.log(Level.INFO, "Valid sequencing: SeqNum expected={0}, SeqNum received={1}", new Object[]{curSeqNum, seqNum});
+				logger.log(Level.FINEST, "Valid sequencing: SeqNum expected={0}, SeqNum received={1}", new Object[]{curSeqNum, seqNum});
 			} else {
 				// We did not receive the sequence number expected, probably due to lag
-				logger.log(Level.INFO, "Invalid sequencing: SeqNum expected={0}, SeqNum received={1}. Missed {2} packets.", new Object[]{curSeqNum, seqNum, (seqNum - curSeqNum)});
+				logger.log(Level.FINE, "Invalid sequencing: SeqNum expected={0}, SeqNum received={1}. Missed {2} packets.", new Object[]{curSeqNum, seqNum, (seqNum - curSeqNum)});
 
 				// Rather than stop playing the audio, probably better to throw out the missed frame and move on.
 				// A good way to fix the lag is to slow the message rate.
@@ -81,14 +83,18 @@ public class StreamPlayer implements Runnable {
 				curSeqNum = seqNum;
 			}
 			// Place received buffer into pre-configured, open audio playback buffer
-			logger.log(Level.INFO, "Writing to audio line, available {0}", audioLine.available());
+			logger.log(Level.FINEST, "Writing to audio line, available {0}", audioLine.available());
 			audioLine.write(audio, 0, datalen);
 		}
 	}
 
+	/**
+	 * Method that opens and setups the audio on the system preparing it to
+	 * receive the streaming data.
+	 */
 	private void openAudioLine() {
-		logger.log(Level.INFO, "Opening SourceDataLine...");
-		logger.log(Level.INFO, "Audio Format: {0}", format);
+		logger.log(Level.FINE, "Opening SourceDataLine...");
+		logger.log(Level.FINE, "Audio Format: {0}", format);
 		try {
 			DataLine.Info lineInfo = new DataLine.Info(SourceDataLine.class, format);
 			for (Mixer.Info info : AudioSystem.getMixerInfo()) {
@@ -109,7 +115,7 @@ public class StreamPlayer implements Runnable {
 			audioLine.start();
 
 			// Now ready to receive audio buffer via the write method
-			logger.log(Level.INFO, "Now ready to playback audio when received.");
+			logger.log(Level.FINE, "Now ready to playback audio when received.");
 
 		} catch (LineUnavailableException ex) {
 			throw new RuntimeException("Could not create an open audio line due to no line being available.");

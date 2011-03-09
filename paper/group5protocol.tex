@@ -8,7 +8,7 @@
 \usepackage{pgf}
 \usetikzlibrary{arrows,automata}
 \author{Dimitri Demergis \\ Jason Lee \\ Stephen Lombardi \\ Marcus McCurdy}
-\title{CS544 Group 5 Protocol}
+\title{CS544 Group 5 \\ Easy Realtime Protocol (ERP)}
 \begin{document}
 
 \maketitle
@@ -18,7 +18,7 @@
 \pagebreak
 
 \section{Introduction}
-This paper defines a media streaming protocol that allows a properly implemented server to stream media to connected clients. Clients are able the join at any time during the streaming process and may be required to authenticate themselves to the server. The protocol is designed to deal with arbitrary streaming data types, including live or prerecorded video and/or audio.
+This paper defines a media streaming protocol that allows a properly implemented server to stream media to connected clients. Clients are able the join at any time during the streaming process and may be required to authenticate themselves to the server. The protocol is designed to deal with arbitrary streaming data types, including live or prerecorded video and/or audio. The default port for the server is $32456$.
 
 
 \section{States}
@@ -152,6 +152,30 @@ server pause or unpause transmission.
 		\hline
 	\end{tabular}
 	\end{description}
+	
+	\subsubsection{HERPMessage}
+	\begin{description}
+	\item[Description] \hfill \\
+		The Hello Easy Realtime Protocol (HERP) message is broadcast from the client to attempt to auto discover a server on the local network.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | }
+		\hline
+		1 byte \\
+		\hline
+		Message ID \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+					\newline Always set to 12 for this message. \\
+		\hline
+	\end{tabular}
+	\end{description}
+	
 \subsubsection{ThrottleMessage}
 	\begin{description}
 	\item[Description] \hfill \\
@@ -264,6 +288,32 @@ server pause or unpause transmission.
 		\hline
 	\end{tabular}
 	\end{description}
+	
+		\subsubsection{DERPMessage}
+	\begin{description}
+	\item[Description] \hfill \\
+		The Discovered Easy Realtime Protocol message is sent from the server as a response to the clients broadcast HERP message.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | c | }
+		\hline
+		1 byte & 4 bytes\\
+		\hline
+		Message ID & Server Port \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+					\newline Always set to 12 for this message. \\
+		\hline
+		Port & int & Contains the port number the server is using. \\
+		\hline
+	\end{tabular}
+	\end{description}
+	
 \subsubsection{RechallengeMessage}
 	\begin{description}
 	\item[Description] \hfill \\
@@ -456,11 +506,12 @@ server pause or unpause transmission.
 % Disconnect = 6
 % Throttle = 7
 %SessionMessage = 2
-%ChallengeMessage = 3
+%Pause = 3
 % ChallengeResult = 8
 %auth err = 9
 %stream = 5
-%Pause = 11
+%rechallenge
+
 
 \section{Extensibility}
 Protocol version information is included in connection messages so that the protocol version used by both sides can be established during the configuration phase.  This allows future improvements to the protocol to be implemented without rendering existing client applications unusable.
@@ -474,6 +525,11 @@ Due to the real-time nature of the protocol, it does not attempt to retransmit a
 
 \section{Quality of Service}
 Streaming media transmission requires careful monitoring of traffic to maintain acceptable levels of loss and to avoid network congestion. These goals are achieved through the ThrottleMessage. The client sends a ThrottleMessage to inform the server that it would like to change the server's rate of transmission to that client. If the network is under a heavy load, the client will observe that packets have been lost in transit by examining sequence numbers. When this occurs, the client will request that the server decrease its current transmission rate to avoid packet loss for other services across the network. This is necessary because UDP will not perform this operation on its own like TCP would. If the client wishes to increase the rate of transmission it may do this as well, but the server is free to ignore any request that is too high.
+
+\section{Auto Discovery}
+The client will auto discover local servers by sending out a HERP message to the broadcast address. It will then wait 1 second and if it does not hear a reply it will send out another broadcast. It will try up to 5
+times before giving up. When the server receives the HERP message it creates a DERP message that it send back to the address and port that the HERP message was sent from. The client then utilizes the information in the
+HERP message to begin the protocol.
 
 \section{Group Contribution}
 Everyone in the group contributed to this writeup. Each member contributed one or more states and messages as well as writing sections and subsections of this document. Everyone provided valuable feedback and ideas during this initial design phase of the protocol.

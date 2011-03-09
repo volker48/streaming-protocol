@@ -4,7 +4,7 @@
 
 package edu.drexel.group5.protocol;
 
-import edu.drexel.group5.MessageType;
+import edu.drexel.group5.common.MessageType;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -38,19 +38,19 @@ public class DiscoveryHandler extends Thread {
 		while (!isInterrupted()) {
 			try {
 				discoverySocket.receive(packet);
-				logger.log(Level.INFO, "Received packet on discovery port");
+				logger.log(Level.FINE, "Received packet on discovery port");
 				MessageType type = MessageType.getMessageTypeFromId(herp[0]) ;
 				if (type != MessageType.HERP) {
 					continue; //ignore all other messages
 				}
-				logger.log(Level.INFO, "Received Herp from {0}", packet.getSocketAddress());
+				logger.log(Level.FINE, "Received Herp from {0}", packet.getSocketAddress());
 				final byte[] derpBuffer = new byte[5];
 				ByteBuffer bytes = ByteBuffer.wrap(derpBuffer);
 				bytes.put(MessageType.DERP.getMessageId());
 				bytes.putInt(serverPort);
 				final DatagramPacket derp = new DatagramPacket(derpBuffer, 0, derpBuffer.length, packet.getSocketAddress());
 				discoverySocket.send(derp);
-				logger.log(Level.INFO, "Sent Derp in reply!");
+				logger.log(Level.FINE, "Sent Derp in reply!");
 			} catch (SocketTimeoutException ex) {
 				//socket timed out check interrupt flag
 			} catch (IOException ex) {

@@ -1,4 +1,4 @@
-package edu.drexel.group5;
+package edu.drexel.group5.common;
 
 import java.io.UnsupportedEncodingException;
 import java.util.logging.Level;
