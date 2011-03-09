@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.SocketException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.FileHandler;
 import java.util.logging.Handler;
@@ -25,23 +26,22 @@ import javax.sound.sampled.UnsupportedAudioFileException;
 public class Server extends Thread {
 
 	private static final Logger logger = Logger.getLogger(Server.class.getName());
-	private static final int BUFFER_LENGTH = 128; //TODO: This can be lowered I think the largest client-to-server message is pretty small.
+	private static final int BUFFER_LENGTH = 128;
 	private final LinkedBlockingQueue<DatagramPacket> packetQueue;
 	private final DatagramSocket socket;
 	private final PacketHandler packetHandler;
+	private final DiscoveryHandler discovery;
 
-	public Server(int port, String pathToFile, AudioFormat format) {
+	public Server(int port, String pathToFile, AudioFormat format) throws SocketException {
 		super("Streaming Protocol Server");
 		Preconditions.checkArgument(port >= 0 && port <= 65535, "%s is not a valid port", port);
 		logger.log(Level.INFO, "Stream Server starting on port: {0} ...", port);
 		this.packetQueue = new LinkedBlockingQueue<DatagramPacket>();
-		try {
-			this.socket = new DatagramSocket(port);
-		} catch (IOException ex) {
-			throw new RuntimeException("Could not create a ServerSocket on port: " + port + " please start the server again with a different unused port", ex);
-		}
+		this.socket = new DatagramSocket(port);
 		this.packetHandler = new PacketHandler(packetQueue, socket, pathToFile, format);
 		this.packetHandler.start();
+		this.discovery = new DiscoveryHandler(port);
+		discovery.start();
 	}
 
 	@Override

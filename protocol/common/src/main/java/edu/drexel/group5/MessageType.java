@@ -8,7 +8,7 @@ public enum MessageType {
 
 	SESSION_REQUEST((byte) 1),
 	SESSION((byte) 2),
-	CHALLENGE((byte) 3),
+	PAUSE((byte) 3),
 	CHALLENGE_RESPONSE((byte) 4),
 	STREAM((byte) 5),
 	DISCONNECT((byte) 6),
@@ -16,7 +16,8 @@ public enum MessageType {
 	RECHALLENGE((byte) 8),
 	AUTHENTICATION_ERROR((byte) 9),
 	STREAM_ERROR((byte) 10),
-	PAUSE((byte) 11);
+	DERP((byte) 11),
+	HERP((byte) 12);
 	private final byte messageId;
 
 	private MessageType(byte messageId) {

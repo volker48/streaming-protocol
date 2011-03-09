@@ -53,7 +53,6 @@ public class StreamSession implements Runnable {
 	private final AudioFormat format;
 	private boolean isPaused = false;
 	private int bytesPerMessage; // Calculated from the audio attributes and the sleep value	
-		
 	// This variable will change to reach the desired rate of bytes/sec
 	private int sleep = 32; // in milliseconds
 
@@ -229,17 +228,17 @@ public class StreamSession implements Runnable {
 		isPaused = (inputPause == 1);
 		logger.log(Level.INFO, "New paused status = ", inputPause);
 	}
-	
+
 	private void handleThrottleMessage(DatagramPacket packet) {
 		byte[] data = packet.getData();
-		final DataInputStream input = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(data)));	
+		final DataInputStream input = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(data)));
 		try {
-			input.skipBytes(2);	
+			input.skipBytes(2);
 			int inputRateDiff = input.readInt();
 			logger.log(Level.INFO, "Processing Throttle Message, sessionId = {0}, rate change (bytes/sec) = {1}", new Object[]{data[1], inputRateDiff});
 			int currentRate = (sleep / bytesPerMessage);
-			int newRate = currentRate + inputRateDiff;		
-			sleep = (newRate/bytesPerMessage);
+			int newRate = currentRate + inputRateDiff;
+			sleep = (newRate / bytesPerMessage);
 			logger.log(Level.INFO, "New rate = {0}", newRate);
 			logger.log(Level.INFO, "New calculated sleep time (ms) = {0}", sleep);
 		} catch (IOException ex) {
@@ -293,8 +292,8 @@ public class StreamSession implements Runnable {
 			}
 			//This is the minimum number of bytes we can send per second to
 			//properly play the stream in real time. 1000 is the number of ms in a second.
-			bytesPerMessage = format.getFrameSize() * (int) format.getFrameRate() / (1000 / sleep);
-			System.out.println("bytesPerMessage = " + bytesPerMessage);
+			bytesPerMessage = (format.getChannels() * format.getFrameSize()
+					* (int) format.getFrameRate()) / (1000 / sleep);
 			if (bytesPerMessage % format.getFrameSize() != 0) {
 				bytesPerMessage++;
 			}
@@ -340,6 +339,9 @@ public class StreamSession implements Runnable {
 				else {
 					try {
 						socket.send(factory.createPauseMessage(sessionId, isPaused));
+						Thread.sleep(1000);
+					} catch (InterruptedException ex) {
+						interrupt();
 					} catch (SocketException ex) {
 						throw new RuntimeException("Problem echoing pause message!", ex);
 					} catch (IOException ex) {

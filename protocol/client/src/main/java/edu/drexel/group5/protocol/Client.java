@@ -1,8 +1,8 @@
 package edu.drexel.group5.protocol;
 
-import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import edu.drexel.group5.PacketFactory;
+import edu.drexel.group5.protocol.ServerFinder.ServerInfo;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -45,12 +45,12 @@ public class Client extends Thread {
 	private boolean isPaused = false;
 	private InputStreamReader reader;
 
-	public Client(InetAddress serverAddress, int serverPort, String password) {
+	public Client(ServerInfo info, String password) {
 		super("Streaming Protocol Client");
-		Preconditions.checkArgument(serverPort >= 0 && serverPort <= 65535, serverPort + " is not a valid port");
+		
 		logger.log(Level.INFO, "Stream Client starting");
 		this.password = password;
-		this.packetFactory = new PacketFactory(serverPort, serverAddress);
+		this.packetFactory = new PacketFactory(info.port, info.ip);
 		try {
 			this.md5 = MessageDigest.getInstance("MD5");
 		} catch (NoSuchAlgorithmException ex) {
@@ -92,7 +92,7 @@ public class Client extends Thread {
 		AudioFormat format = getAudioFormatFromStream(bytestream);
 		this.player = new StreamPlayer(dataQueue, format, md5);
 		this.playerThread = new Thread(player, "StreamPlayer Thread");
-		
+
 		logger.log(Level.INFO, "Challenge Value from server: {0}", challengeValue);
 		socket.send(packetFactory.createChallengeResponse(sessionId, challengeValue, password));
 		logger.log(Level.INFO, "Challenge response sent!");
@@ -308,15 +308,31 @@ public class Client extends Thread {
 	public static void main(String[] args) throws IOException {
 		Handler logFileHandler = new FileHandler("client.log", 8192, 5, true);
 		Logger.getLogger("").addHandler(logFileHandler);
-		Preconditions.checkArgument(args.length == 3, "Argument missing.\nUsage: server-ip server-port password");
-		InetAddress serverAddress = null;
-		try {
-			serverAddress = InetAddress.getByName(args[0]);
-		} catch (UnknownHostException ex) {
-			logger.log(Level.SEVERE, "Unknown server", ex);
-			System.exit(1);
+		ServerInfo info = null;
+		Client client = null;
+		if (args.length == 1) {
+			logger.log(Level.INFO, "Trying to auto discover a local server...");
+			final ServerFinder finder = new ServerFinder();
+			info = finder.findServer();
+			if (info == null) {
+				logger.log(Level.SEVERE,
+						"No server could be found on the local network! Try starting the client with the arguments server-ip server-port password");
+				System.exit(1);
+			}
+			client = new Client(info, args[0]);
+		} else if (args.length == 3) {
+			InetAddress serverAddress = null;
+			try {
+				serverAddress = InetAddress.getByName(args[0]);
+			} catch (UnknownHostException ex) {
+				logger.log(Level.SEVERE, "Unknown server", ex);
+				System.exit(1);
+			}
+			info = new ServerInfo(Integer.parseInt(args[1]), serverAddress);
+			client = new Client(info, args[3]);
 		}
-		Client client = new Client(serverAddress, Integer.parseInt(args[1]), args[2]);
+
+		
 		client.start();
 
 		try {
