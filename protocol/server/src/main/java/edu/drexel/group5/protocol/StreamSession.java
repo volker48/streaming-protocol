@@ -4,7 +4,6 @@ import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.File;
@@ -21,10 +20,11 @@ import edu.drexel.group5.State;
 import edu.drexel.group5.StringUtils;
 import java.io.BufferedInputStream;
 import java.io.DataInputStream;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem; 
+import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.UnsupportedAudioFileException;
 
@@ -50,6 +50,8 @@ public class StreamSession implements Runnable {
 	private final String pathToFile;
 	private StreamingThread streamer;
 	private final DatagramPacket sessionRequest;
+	private final AudioFormat format;
+	private boolean isPaused = false;
 
 	/**
 	 *
@@ -57,7 +59,9 @@ public class StreamSession implements Runnable {
 	 * The data in this packet will be used for future communication with the
 	 * client.
 	 */
-	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue, DatagramPacket sessionRequest, DatagramSocket socket, byte sessionId, String pathToFile) {
+	public StreamSession(LinkedBlockingQueue<DatagramPacket> packetQueue,
+			DatagramPacket sessionRequest, DatagramSocket socket,
+			byte sessionId, String pathToFile, AudioFormat format) {
 		Preconditions.checkNotNull(packetQueue);
 		Preconditions.checkNotNull(socket);
 		Preconditions.checkArgument(packetQueue.size() == 0);
@@ -66,6 +70,7 @@ public class StreamSession implements Runnable {
 		this.socket = socket;
 		this.sessionId = sessionId;
 		this.sessionRequest = sessionRequest;
+		this.format = format;
 		state = State.CONNECTING;
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
 	}
@@ -96,31 +101,28 @@ public class StreamSession implements Runnable {
 		final int client = packet.getData()[1];
 		logger.log(Level.INFO, "Client version is: {0}", client);
 		if (client > SERVER_VERSION) {
+			try {
+				//create stream Error message
+				socket.send(factory.createDisconnectMessage(sessionId));
+			} catch (IOException ex) {
+				Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, "", ex);
+			}
 			throw new RuntimeException("Client has incompatible version!");
 		}
 		final int challengeValue = rand.nextInt();
 		logger.log(Level.INFO, "Challenge Value is: {0}", challengeValue);
 		try {
-			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, challengeValue, pathToFile);
+			DatagramPacket session = factory.createSessionMessage(sessionId, SERVER_VERSION, challengeValue, format);
 			socket.send(session);
 			logger.log(Level.INFO, "Session Message sent to client");
 		} catch (IOException ex) {
 			shutdownSession();
 		}
 		state = state.AUTHENTICATING;
-		final MessageDigest md;
-		try {
-			md = MessageDigest.getInstance("SHA-1");
-		} catch (NoSuchAlgorithmException ex) {
-			throw new RuntimeException("SHA-1 is not available on this system!", ex);
-		}
-		md.update(factory.intToByteArray(challengeValue));
-		md.update(PASSWORD.getBytes());
-		byte[] serverCalculatedHash = md.digest();
-		final String serverHash = StringUtils.getHexString(serverCalculatedHash);
-		logger.log(Level.INFO, "Server Hash: {0}", serverHash);
-		int counter = authenticate(serverCalculatedHash);
-		if (counter == MAX_AUTH_RETRY) {
+		byte[] serverCalculatedHash = calculateHash(challengeValue, PASSWORD);
+		logger.log(Level.INFO, "Server Hash: {0}", StringUtils.getHexString(serverCalculatedHash));
+		boolean authSuccessful = authenticate(serverCalculatedHash);
+		if (!authSuccessful) {
 			state = State.DISCONNECTED;
 			try {
 				socket.send(factory.createAuthenticationError(sessionId, MAX_RETRY_ERROR));
@@ -133,7 +135,19 @@ public class StreamSession implements Runnable {
 		}
 	}
 
-	private int authenticate(byte[] serverCalculatedHash) {
+	private byte[] calculateHash(int challengeValue, String secret) {
+		final MessageDigest md;
+		try {
+			md = MessageDigest.getInstance("SHA-1");
+		} catch (NoSuchAlgorithmException ex) {
+			throw new RuntimeException("SHA-1 is not available on this system!", ex);
+		}
+		md.update(factory.intToByteArray(challengeValue));
+		md.update(secret.getBytes());
+		return md.digest();
+	}
+
+	private boolean authenticate(byte[] serverCalculatedHash) {
 		int counter = 0;
 		logger.log(Level.INFO, "Counter: {0}, State: {1}", new Object[]{counter, state});
 		while (counter < MAX_AUTH_RETRY) {
@@ -143,7 +157,7 @@ public class StreamSession implements Runnable {
 				challengeResponse = packetQueue.take();
 			} catch (InterruptedException ex) {
 				shutdownSession();
-				return -1;
+				return false;
 			}
 			logger.log(Level.INFO, "Received a message from the client checking the message...");
 			final byte[] data = challengeResponse.getData();
@@ -164,25 +178,24 @@ public class StreamSession implements Runnable {
 				int lengthOfHash = input.readInt();
 				final byte[] responseHash = new byte[lengthOfHash];
 				input.read(responseHash, 0, lengthOfHash);
-				String clientHash = StringUtils.getHexString(responseHash);
-				logger.log(Level.INFO, "Client hash is: {0}", clientHash);
+				logger.log(Level.INFO, "Client hash is: {0}", StringUtils.getHexString(responseHash));
 				if (!Arrays.equals(responseHash, serverCalculatedHash)) {
 					logger.log(Level.WARNING, "Client did not authenticate!");
-					socket.send(factory.createChallengeResult(sessionId, (byte) 0));
+					int newChallenge = rand.nextInt();
+					serverCalculatedHash = calculateHash(newChallenge, PASSWORD);
+					socket.send(factory.createRechallengeMessage(sessionId, newChallenge));
 					counter++;
 				} else {
 					logger.log(Level.INFO, "Hashes match, transitioning to streaming state");
 					state = State.STREAMING;
-					socket.send(factory.createChallengeResult(sessionId, (byte) 1));
-					logger.log(Level.INFO, "Challenge result sent to client");
 					startStreaming();
-					return counter;
+					return true;
 				}
 			} catch (IOException ex) {
 				shutdownSession();
 			}
 		}
-		return counter;
+		return false;
 	}
 
 	private void shutdownSession() {
@@ -192,6 +205,22 @@ public class StreamSession implements Runnable {
 
 	private void handlePacketWhileStreaming(DatagramPacket packet) {
 		logger.log(Level.INFO, "Received packet while streaming!"); //TODO: Implement
+		byte[] data = packet.getData();
+		MessageType messageType = MessageType.getMessageTypeFromId(data[0]);
+		switch (messageType) {
+			case PAUSE:
+				handlePauseMessage(packet);
+				break;
+		}
+
+	}
+
+	private void handlePauseMessage(DatagramPacket packet) {
+		byte[] data = packet.getData();
+		byte inputPause = data[2];
+		logger.log(Level.WARNING, "Processing Pause Message, sessionId = {0}, paused? = {1}", new Object[]{data[1], data[2]});
+		isPaused = (inputPause == 1);
+		logger.log(Level.WARNING, "New paused status = ", inputPause);
 	}
 
 	private void startStreaming() {
@@ -206,19 +235,18 @@ public class StreamSession implements Runnable {
 		private int sequenceNumber = 0;
 		private final MessageDigest digest;
 		private final byte[] buffer;
-		
 		// These two variables control the audio is sent (and therefore the playback quality on the client)
-		private int sleep = 25;
-		private int bytesPerMessage = 1000;
+		private int sleep = 32;
+		private int bytesPerMessage;
 
 		public StreamingThread() {
 			logger.log(Level.INFO, "Streamer thread initialization");
 			try {
 				// Get the audio stream to transmit
-				File soundFile = new File(pathToFile);				
+				File soundFile = new File(pathToFile);
 				input = AudioSystem.getAudioInputStream(soundFile);
 				AudioFormat format = input.getFormat();
-				
+
 				// Logging to find out what audio file and format we are sending
 				logger.log(Level.INFO, "Audio file properties: {0}", format.toString());
 				logger.log(Level.INFO, "AUDIO - Frame Rate = {0}", format.getFrameRate());
@@ -229,61 +257,73 @@ public class StreamSession implements Runnable {
 				logger.log(Level.INFO, "AUDIO - Sample Size = {0}", format.getSampleSizeInBits());
 				logger.log(Level.INFO, "AUDIO - Big Endian = {0}", format.isBigEndian());
 				logger.log(Level.INFO, "AUDIO - Frames (file) = {0}", input.getFrameLength());
-				
-				buffer = new byte[bytesPerMessage];
-				
-				
+
 			} catch (FileNotFoundException ex) {
 				throw new RuntimeException("Could not open the file for streaming!", ex);
 			} catch (UnsupportedAudioFileException ex) {
 				throw new RuntimeException("Audio file type not supported.", ex);
 			} catch (IOException ex) {
 				throw new RuntimeException("Error when reading file.", ex);
-            }
-				
-			
+			}
 			try {
 				digest = MessageDigest.getInstance("MD5");
 			} catch (NoSuchAlgorithmException ex) {
 				throw new RuntimeException("Could not obtain the hash algoritm", ex);
 			}
+			//This is the minimum number of bytes we can send per second to
+			//properly play the stream. 1000 is the number of ms in a second.
+			bytesPerMessage = format.getFrameSize() * (int) format.getFrameRate() / (1000 / sleep);
+			System.out.println("bytesPerMessage = " + bytesPerMessage);
+			if (bytesPerMessage % format.getFrameSize() != 0) {
+				bytesPerMessage++;
+			}
+			buffer = new byte[bytesPerMessage];
 		}
 
 		@Override
 		public void run() {
 			while (!isInterrupted()) {
-				int bytesRead;
-				try {
-					bytesRead = input.read(buffer, 0, bytesPerMessage);
-				} catch (IOException ex) {
-					throw new RuntimeException("Error during streaming!", ex);
-				}
-				if (bytesRead == -1) {
-					logger.log(Level.INFO, "End of stream reached, stream complete");
+				if (!isPaused) {
+					int bytesRead;
 					try {
-						input.close();
+						bytesRead = input.read(buffer, 0, bytesPerMessage);
 					} catch (IOException ex) {
-						logger.log(Level.SEVERE, "Could not close the streams!", ex);
+						throw new RuntimeException("Error during streaming!", ex);
 					}
-					return;
-				}
-				byte[] crc = digest.digest(buffer);
-				try {
-					DatagramPacket streamMessage = factory.createStreamMessage(sessionId, sequenceNumber, buffer, crc);
-					socket.send(streamMessage);
-					sequenceNumber++;
-				} catch (SocketException ex) {
-					throw new RuntimeException("Problem creating stream message!", ex);
-				} catch (IOException ex) {
-					throw new RuntimeException("Could not send stream message!", ex);
-				}
-				try {
-					Thread.sleep(sleep);
-                    // a canonical way to determine it
-					Thread.sleep(25); 
-				} catch (InterruptedException ex) {
-					logger.log(Level.INFO, "Streaming cancelled!");
-					interrupt();
+					if (bytesRead == -1) {
+						logger.log(Level.INFO, "End of stream reached, stream complete");
+						try {
+							input.close();
+						} catch (IOException ex) {
+							logger.log(Level.SEVERE, "Could not close the streams!", ex);
+						}
+						return;
+					}
+					byte[] crc = digest.digest(buffer);
+					try {
+						DatagramPacket streamMessage = factory.createStreamMessage(sessionId, sequenceNumber, buffer, crc);
+						socket.send(streamMessage);
+						sequenceNumber++;
+					} catch (SocketException ex) {
+						throw new RuntimeException("Problem creating stream message!", ex);
+					} catch (IOException ex) {
+						throw new RuntimeException("Could not send stream message!", ex);
+					}
+					try {
+						Thread.sleep(sleep);
+					} catch (InterruptedException ex) {
+						logger.log(Level.INFO, "Streaming cancelled!");
+						interrupt();
+					}
+				} // While in a pause state, echo pause message to client to keep socket alive
+				else {
+					try {
+						socket.send(factory.createPauseMessage(sessionId, isPaused));
+					} catch (SocketException ex) {
+						throw new RuntimeException("Problem echoing pause message!", ex);
+					} catch (IOException ex) {
+						throw new RuntimeException("Could not echo pause message!", ex);
+					}
 				}
 			}
 		}

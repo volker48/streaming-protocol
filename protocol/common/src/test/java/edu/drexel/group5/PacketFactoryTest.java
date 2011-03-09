@@ -7,10 +7,12 @@ package edu.drexel.group5;
 
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.IOException;
 import java.io.PrintStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.util.Random;
@@ -29,20 +31,32 @@ public class PacketFactoryTest {
 		MessageDigest md = MessageDigest.getInstance("SHA-1");
 		md.update("5".getBytes());
 		byte[] hash = md.digest();
-		System.out.println("hash = " + hash);
+		System.out.println("hash = " + StringUtils.getHexString(hash));
 		System.out.println("hash.length = " + hash.length);
 		String secret = "secret";
 		md.update("5".getBytes());
 		md.update(secret.getBytes());
 		byte[] hash2 = md.digest();
-		System.out.println("hash2: " + hash2);
+		System.out.println("hash2: " + StringUtils.getHexString(hash2));
 		System.out.println("hash2.length = " + hash2.length);
-		PrintStream ps = new PrintStream(System.out);
-		System.out.println("printstream has output");
-		ps.write(hash);
-		System.out.println("Hash2:");
-		ps.write(hash2);
 	}
+
+	@Test
+	public void byteBufferTest() throws IOException {
+		final byte[] data = new byte[5];
+		final ByteBuffer buffer = ByteBuffer.wrap(data);
+		final byte sessionId = 5;
+		final int challengeValue = 1234568;
+		buffer.put(sessionId);
+		buffer.putInt(challengeValue);
+
+		final DataInputStream input = new DataInputStream(new ByteArrayInputStream(data));
+		byte fromInputSessionId = input.readByte();
+		int fromInputChallenge = input.readInt();
+		assertEquals(sessionId, fromInputSessionId);
+		assertEquals(challengeValue, fromInputChallenge);
+	}
+
 
 	@Test
 	public void	testCreateSessionMessage() throws Exception {

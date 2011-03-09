@@ -10,12 +10,13 @@ public enum MessageType {
 	SESSION((byte) 2),
 	CHALLENGE((byte) 3),
 	CHALLENGE_RESPONSE((byte) 4),
-	CHALLENGE_RESULT((byte) 8),
-	AUTHENTICATION_ERROR((byte) 9),
 	STREAM((byte) 5),
-	THROTTLE((byte) 7),
 	DISCONNECT((byte) 6),
-	STREAM_ERROR((byte) 10);
+	THROTTLE((byte) 7),
+	RECHALLENGE((byte) 8),
+	AUTHENTICATION_ERROR((byte) 9),
+	STREAM_ERROR((byte) 10),
+	PAUSE((byte) 11);
 	private final byte messageId;
 
 	private MessageType(byte messageId) {
