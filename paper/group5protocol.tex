@@ -66,7 +66,8 @@ While in this state, the server will send Streaming messages to the client at a 
 will monitor the sequence numbers of the received packets to detect network transmission problems - if 
 these problems pass a certain threshhold, the client can send a Throttle message to the Server, 
 requesting that the transmission rate be decreased.  The server can choose to accept or ignore the 
-request.  
+request.  During streaming, the client can also choose to send a Pause message, requesting that the
+server pause or unpause transmission.
 
 
 \section{Messages}
@@ -177,6 +178,35 @@ request.
         \hline
 	\end{tabular}
 	\end{description}
+\subsubsection{PauseMessage}
+	\begin{description}
+	\item[Description] \hfill \\
+		This message is sent from the client while in the Streaming state to request the server \\
+		to Pause or Unpause transmission of Streaming messages.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | c | c | }
+		\hline
+		1 byte & 1 byte & 1 byte \\
+		\hline
+		Message ID & Session ID & Pause Indication \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+					\newline Always set to 11 for this message. \\
+		\hline
+		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+		\hline
+        		Pause Indication & byte & Indicates the desired Pause state.
+					\newline 0 = Unpause
+					\newline 1 = Pause \\
+        		\hline
+	\end{tabular}
+	\end{description}
 
 \subsection{Server-to-Client Messages}
 \subsubsection{SessionMessage}
@@ -187,7 +217,7 @@ request.
 		that will be used in further communication with the server.  It also contains the first 
 		authentication challenge value sent from the server to the client, as well as the parameters 
 		the audio file that the server intends to stream.
-		This message signals the transition from the Connecting State to the Authenticating state.
+		This message transitions the protocol from the Connecting state to the Authenticating state.
 	\item[Message Format] \hfill \\
 	\begin{tabular}{ | c | c | c | c | c | c |}
 		\hline
@@ -228,7 +258,7 @@ request.
 						\newline 0 = Unsigned
 						\newline 1 = Signed \\
 		\hline
-		Big-Endian Flag & bool & Indicates whether the audio data is big-endian. 
+		Big-Endian Flag & bool & Indicates whether bytes of audio data are in big-endian order. 
 						\newline 0 = Little-endian
 						\newline 1 = Big-endian \\
 		\hline
@@ -414,6 +444,7 @@ request.
 	(4) edge				node {disconnect}		(1)
 	      edge [loop below]	node {throttle}			(4)
 	      edge [loop above] node{stream}			(4)
+	      edge [loop right] node{pause}			(4)
 	      edge [bend left]		node {stream err}		(1)	      	
 	
 	;
@@ -429,6 +460,7 @@ request.
 % ChallengeResult = 8
 %auth err = 9
 %stream = 5
+%Pause = 11
 
 \section{Extensibility}
 Protocol version information is included in connection messages so that the protocol version used by both sides can be established during the configuration phase.  This allows future improvements to the protocol to be implemented without rendering existing client applications unusable. In addition to this, the type of media and encoding that the stream uses are sent to the client as an ASCII-encoded string. This allows clients and servers to implement additional encodings as they are developed without updates to the protocol.
