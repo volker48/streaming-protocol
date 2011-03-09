@@ -214,8 +214,8 @@ public class StreamSession implements Runnable {
 		private final MessageDigest digest;
 		private final byte[] buffer;
 		// These two variables control the audio is sent (and therefore the playback quality on the client)
-		private int sleep = 25;
-		private int bytesPerMessage = 1000;
+		private int sleep = 32;
+		private int bytesPerMessage;
 
 		public StreamingThread() {
 			logger.log(Level.INFO, "Streamer thread initialization");
@@ -236,7 +236,6 @@ public class StreamSession implements Runnable {
 				logger.log(Level.INFO, "AUDIO - Big Endian = {0}", format.isBigEndian());
 				logger.log(Level.INFO, "AUDIO - Frames (file) = {0}", input.getFrameLength());
 
-				buffer = new byte[bytesPerMessage];
 
 
 			} catch (FileNotFoundException ex) {
@@ -253,6 +252,14 @@ public class StreamSession implements Runnable {
 			} catch (NoSuchAlgorithmException ex) {
 				throw new RuntimeException("Could not obtain the hash algoritm", ex);
 			}
+			//This is the minimum number of bytes we can send per second to
+			//properly play the stream. 1000 is the number of ms in a second.
+			bytesPerMessage = format.getFrameSize() * (int)format.getFrameRate() / (1000 / sleep) ;
+			System.out.println("bytesPerMessage = " + bytesPerMessage);
+			if (bytesPerMessage % format.getFrameSize() != 0) {
+				bytesPerMessage++;
+			}
+			buffer = new byte[bytesPerMessage];
 		}
 
 		@Override
