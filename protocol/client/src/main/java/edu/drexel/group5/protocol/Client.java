@@ -329,7 +329,7 @@ public class Client extends Thread {
 				System.exit(1);
 			}
 			info = new ServerInfo(Integer.parseInt(args[1]), serverAddress);
-			client = new Client(info, args[3]);
+			client = new Client(info, args[2]);
 		}
 
 		
