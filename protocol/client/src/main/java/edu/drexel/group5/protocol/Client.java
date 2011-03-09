@@ -4,12 +4,10 @@ import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import edu.drexel.group5.PacketFactory;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.ObjectInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -21,6 +19,8 @@ import java.util.logging.Logger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.FileHandler;
+import java.util.logging.Handler;
 import javax.sound.sampled.AudioFormat;
 
 /**
@@ -305,7 +305,9 @@ public class Client extends Thread {
 		}
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
+		Handler logFileHandler = new FileHandler("client.log", 8192, 5, true);
+		Logger.getLogger("").addHandler(logFileHandler);
 		Preconditions.checkArgument(args.length == 3, "Argument missing.\nUsage: server-ip server-port password");
 		InetAddress serverAddress = null;
 		try {

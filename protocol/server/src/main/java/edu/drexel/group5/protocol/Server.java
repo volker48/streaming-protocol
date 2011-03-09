@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.FileHandler;
+import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.sound.sampled.AudioFileFormat;
@@ -60,7 +62,9 @@ public class Server extends Thread {
 		}
 	}
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
+		Handler logFileHandler = new FileHandler("server.log", 8192, 5, true);
+		Logger.getLogger("").addHandler(logFileHandler);
 		Preconditions.checkArgument(args.length == 2, "Invalid number of arguments! Usage: port path-to-file");
 		File audioFile = new File(args[1]);
 		Preconditions.checkArgument(audioFile.isFile(), "The argument for the path to the file to stream is not a file!");
