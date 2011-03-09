@@ -4,9 +4,11 @@ import com.google.common.base.Preconditions;
 import edu.drexel.group5.MessageType;
 import edu.drexel.group5.PacketFactory;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -41,6 +43,8 @@ public class Client extends Thread {
 	private StreamPlayer player;
 	private final LinkedBlockingQueue<ByteBuffer> dataQueue;
 	private Thread playerThread;
+	private boolean isPaused = false;
+	private InputStreamReader reader;
 	// Playback data members
 
 	public Client(InetAddress serverAddress, int serverPort, String password) {
@@ -62,6 +66,7 @@ public class Client extends Thread {
 		}
 		this.dataQueue = new LinkedBlockingQueue<ByteBuffer>();
 		this.state = edu.drexel.group5.State.DISCONNECTED;
+
 	}
 
 	public void acceptSession(byte[] buffer) throws IOException {
@@ -243,6 +248,8 @@ public class Client extends Thread {
 					case STREAM_ERROR:
 						acceptStreamError(buffer);
 						break;
+					case PAUSE: // used simply to keep socket alive
+						break;
 					default:
 						logger.log(Level.WARNING, "Received an unexpected message: {0} dropping the packet", message);
 				}
@@ -268,6 +275,27 @@ public class Client extends Thread {
 			} catch (IOException ex) {
 				logger.log(Level.WARNING, "Error handling packet!", ex);
 			}
+			
+			checkConsole();
+				
+		}
+	}
+	
+	private void checkConsole() {
+		// Check system input for a pause command
+		char input;
+		reader = new InputStreamReader(System.in);
+		try {
+			if ( reader.ready() ) {
+				input = (char)reader.read();
+				if (input == 'p' || input == 'P') {
+					isPaused = !isPaused;
+					socket.send(packetFactory.createPauseMessage(sessionId, isPaused));
+					logger.log(Level.INFO, "Sent Pause Message");
+				}
+			}
+		} catch (IOException e) {
+			logger.log(Level.WARNING, "Error reading from input!", e);
 		}
 	}
 

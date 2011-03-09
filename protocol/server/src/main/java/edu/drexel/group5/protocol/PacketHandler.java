@@ -64,6 +64,7 @@ public class PacketHandler extends Thread {
 					case THROTTLE:
 					case CHALLENGE_RESPONSE:
 					case DISCONNECT:
+					case PAUSE:
 						//fall through is intentional
 						byte clientsSessionId = data[1];
 						if (!connectedClients.contains(packet.getSocketAddress())) {

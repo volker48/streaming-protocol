@@ -46,6 +46,7 @@ public class StreamSession implements Runnable {
 	private StreamingThread streamer;
 	private final DatagramPacket sessionRequest;
 	private final AudioFormat format;
+	private boolean isPaused = false;
 
 	/**
 	 *
@@ -199,6 +200,22 @@ public class StreamSession implements Runnable {
 
 	private void handlePacketWhileStreaming(DatagramPacket packet) {
 		logger.log(Level.INFO, "Received packet while streaming!"); //TODO: Implement
+		byte[] data = packet.getData();
+		MessageType messageType = MessageType.getMessageTypeFromId(data[0]);
+		switch (messageType) {
+			case PAUSE:
+				handlePauseMessage(packet);
+				break;
+		}
+		
+	}
+	
+	private void handlePauseMessage(DatagramPacket packet) {
+		byte[] data = packet.getData();
+		byte inputPause = data[2];
+		logger.log(Level.WARNING, "Processing Pause Message, sessionId = {0}, paused? = {1}", new Object[]{data[1], data[2]});
+		isPaused = (inputPause == 1);	
+		logger.log(Level.WARNING, "New paused status = ", inputPause);
 	}
 
 	private void startStreaming() {
@@ -258,37 +275,49 @@ public class StreamSession implements Runnable {
 		@Override
 		public void run() {
 			while (!isInterrupted()) {
-				int bytesRead;
-				try {
-					bytesRead = input.read(buffer, 0, bytesPerMessage);
-				} catch (IOException ex) {
-					throw new RuntimeException("Error during streaming!", ex);
-				}
-				if (bytesRead == -1) {
-					logger.log(Level.INFO, "End of stream reached, stream complete");
+				if (!isPaused) {
+					int bytesRead;
 					try {
-						input.close();
+						bytesRead = input.read(buffer, 0, bytesPerMessage);
 					} catch (IOException ex) {
-						logger.log(Level.SEVERE, "Could not close the streams!", ex);
+						throw new RuntimeException("Error during streaming!", ex);
 					}
-					return;
+					if (bytesRead == -1) {
+						logger.log(Level.INFO, "End of stream reached, stream complete");
+						try {
+							input.close();
+						} catch (IOException ex) {
+							logger.log(Level.SEVERE, "Could not close the streams!", ex);
+						}
+						return;
+					}
+					byte[] crc = digest.digest(buffer);
+					try {
+						DatagramPacket streamMessage = factory.createStreamMessage(sessionId, sequenceNumber, buffer, crc);
+						socket.send(streamMessage);
+						sequenceNumber++;
+					} catch (SocketException ex) {
+						throw new RuntimeException("Problem creating stream message!", ex);
+					} catch (IOException ex) {
+						throw new RuntimeException("Could not send stream message!", ex);
+					}
+					try {
+						Thread.sleep(sleep);
+						// a canonical way to determine it
+					} catch (InterruptedException ex) {
+						logger.log(Level.INFO, "Streaming cancelled!");
+						interrupt();
+					}
 				}
-				byte[] crc = digest.digest(buffer);
-				try {
-					DatagramPacket streamMessage = factory.createStreamMessage(sessionId, sequenceNumber, buffer, crc);
-					socket.send(streamMessage);
-					sequenceNumber++;
-				} catch (SocketException ex) {
-					throw new RuntimeException("Problem creating stream message!", ex);
-				} catch (IOException ex) {
-					throw new RuntimeException("Could not send stream message!", ex);
-				}
-				try {
-					Thread.sleep(sleep);
-					// a canonical way to determine it
-				} catch (InterruptedException ex) {
-					logger.log(Level.INFO, "Streaming cancelled!");
-					interrupt();
+				// While in a pause state, echo pause message to client to keep socket alive
+				else {
+					try {
+						socket.send(factory.createPauseMessage(sessionId, isPaused));
+					} catch (SocketException ex) {
+						throw new RuntimeException("Problem echoing pause message!", ex);
+					} catch (IOException ex) {
+						throw new RuntimeException("Could not echo pause message!", ex);
+					}
 				}
 			}
 		}

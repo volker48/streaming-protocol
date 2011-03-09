@@ -15,7 +15,8 @@ public enum MessageType {
 	THROTTLE((byte) 7),
 	RECHALLENGE((byte) 8),
 	AUTHENTICATION_ERROR((byte) 9),
-	STREAM_ERROR((byte) 10);
+	STREAM_ERROR((byte) 10),
+	PAUSE((byte) 11);
 	private final byte messageId;
 
 	private MessageType(byte messageId) {

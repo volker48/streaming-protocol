@@ -156,4 +156,9 @@ public class PacketFactory {
 		final byte[] outputData = bytesOut.toByteArray();
 		return new DatagramPacket(outputData, outputData.length, destination);
 	}
+	
+	public DatagramPacket createPauseMessage(byte sessionId, boolean isPaused) throws SocketException {
+		final byte[] data = new byte[]{MessageType.PAUSE.getMessageId(), sessionId, isPaused ? (byte)1 : (byte)0};		
+		return new DatagramPacket(data, data.length, destination);
+	}
 }
