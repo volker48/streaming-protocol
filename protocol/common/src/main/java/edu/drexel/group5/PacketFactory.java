@@ -161,4 +161,16 @@ public class PacketFactory {
 		final byte[] data = new byte[]{MessageType.PAUSE.getMessageId(), sessionId, isPaused ? (byte)1 : (byte)0};		
 		return new DatagramPacket(data, data.length, destination);
 	}
+	
+	public DatagramPacket createThrottleMessage(byte sessionId, int rateDiff) throws SocketException, IOException {
+		final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+		final DataOutputStream output = new DataOutputStream(new BufferedOutputStream(bytes));
+		output.writeByte(MessageType.THROTTLE.getMessageId());
+		output.writeByte(sessionId);
+		output.writeInt(rateDiff);
+		output.flush();
+		final byte[] data = bytes.toByteArray();
+		output.close();
+		return new DatagramPacket(data, data.length, destination);
+	}
 }
