@@ -26,12 +26,12 @@ public class StringUtils {
 			hex[index++] = HEX_CHAR_TABLE[v >>> 4];
 			hex[index++] = HEX_CHAR_TABLE[v & 0xF];
 		}
-		String hexString;
+		String hexString = null;
 		try {
-			hexString = new String(hex, "ASCII");
+			hexString = new String(hex, "US-ASCII");
 		} catch (UnsupportedEncodingException ex) {
 			Logger.getLogger(StringUtils.class.getName()).log(Level.SEVERE, "Could not convert bytes to hex string!", ex);
 		}
-		return "Could not convert to Hex!";
+		return hexString == null ? "Coult not convert to hex!" : hexString;
 	}
 }

@@ -20,6 +20,56 @@
 \section{Introduction}
 This paper defines a media streaming protocol that allows a properly implemented server to stream media to connected clients. Clients are able the join at any time during the streaming process and may be required to authenticate themselves to the server. The protocol is designed to deal with arbitrary streaming data types, including live or prerecorded video and/or audio.
 
+
+\section{States}
+This section describes the states of the protocol, the messages expected in those states, and the
+transitions between states.
+
+\subsection{Disconnected}
+The protocol always begins in the disconnected state. The client transitions from the disconnected
+to connecting state immediately after  sending the server a SessionRequest message. 
+The server transitions to the connecting state upon receipt of the SessionRequest message.
+
+\subsection{Connecting}
+In the connecting state, the client will wait an implementation dependent amount of time for the 
+session message. If the client does not receive the message within the timeout it will resend
+the session request to the server. If the server is already processing a session request for a client
+it should ignore subsequent requests.
+
+After the server provisions the session, it sends the client a SessionMessage. This message 
+contains the session id the client will use for subsequent communication with the server as
+well as the challenge value for the CHAP authentication, which is described in more detail
+in section~\ref{sec:security}.
+
+\subsection{Authenticating}
+After the client receives the SessionMessage containing the challenge value, it computes
+a hash using the SHA-1 algorithm of the challenge value concatenated with a shared secret. The
+client then sends the hash in a ChallengeResponse message to the server. The server compares
+the clients hash with its own calculated hash. If the hashes match, then the server begins sending
+StreamMessages to the client. If the hash comparison fails, then the server sends the client a
+RechallengeMessage that contains a new challenge value. If the client fails an implementation
+dependent number of challenges the server will send an AuthenticationError message to the client.
+
+While in the authentication state, the client will remain in the Authentication state until it receives
+a RechallengeMessage at which time it will calculate a the new hash and send the 
+server a new ChallengeResponse. If the client receives a StreamMessage it will transition to 
+the Streaming state. If the client receives no messages before the implementation dependent
+timeout expires it will resend the last ChallengeResponse assuming that the packet was lost.
+
+\subsection{Streaming}
+Once the server verifies that the authentication hash received from the client matches its own hash value, 
+it transitions to the Streaming state and begins sending Streaming messages to the client.  The receipt of 
+the first streaming message is an indication to the client that the authentication process terminated 
+successfully and that it should also pass to the Streaming state.  
+
+While in this state, the server will send Streaming messages to the client at a periodic rate.  The client
+will monitor the sequence numbers of the received packets to detect network transmission problems - if 
+these problems pass a certain threshhold, the client can send a Throttle message to the Server, 
+requesting that the transmission rate be decreased.  The server can choose to accept or ignore the 
+request.  During streaming, the client can also choose to send a Pause message, requesting that the
+server pause or unpause transmission.
+
+
 \section{Messages}
 \subsection{Client-to-Server Messages}
 \subsubsection{SessionRequestMessage}
@@ -128,20 +178,60 @@ This paper defines a media streaming protocol that allows a properly implemented
         \hline
 	\end{tabular}
 	\end{description}
+\subsubsection{PauseMessage}
+	\begin{description}
+	\item[Description] \hfill \\
+		This message is sent from the client while in the Streaming state to request the server \\
+		to Pause or Unpause transmission of Streaming messages.
+	\item[Message Format] \hfill \\
+	\begin{tabular}{ | c | c | c | }
+		\hline
+		1 byte & 1 byte & 1 byte \\
+		\hline
+		Message ID & Session ID & Pause Indication \\
+		\hline
+	\end{tabular}
+	\item[Message Field Definitions] \hfill \\
+	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
+		\hline
+		Field Name & Data Type & Definition \\
+		\hline
+		Message ID & byte & Contains the Message ID number. 
+					\newline Always set to 11 for this message. \\
+		\hline
+		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+		\hline
+        		Pause Indication & byte & Indicates the desired Pause state.
+					\newline 0 = Unpause
+					\newline 1 = Pause \\
+        		\hline
+	\end{tabular}
+	\end{description}
 
 \subsection{Server-to-Client Messages}
 \subsubsection{SessionMessage}
 	\begin{description}
 	\item[Description] \hfill \\
-		This is the servers reply to the SessionRequestMessage. It tells the client what version of 
-		the protocol that will be used during the streaming session. It also contains the session id 
-		that will be used in further communication with the server.
+		This is the server's reply to the SessionRequestMessage. It tells the client what version of 
+		the protocol that will be used during the streaming session, and contains the session id 
+		that will be used in further communication with the server.  It also contains the first 
+		authentication challenge value sent from the server to the client, as well as the parameters 
+		the audio file that the server intends to stream.
+		This message transitions the protocol from the Connecting state to the Authenticating state.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | c | c | }
+	\begin{tabular}{ | c | c | c | c | c | c |}
 		\hline
-		1 byte & 1 byte & 1 byte & 1 byte & $n$-bytes \\
+		1 byte & 1 byte & 1 byte & 4 bytes & 4 bytes & 4 bytes  \\
 		\hline
-		Message ID & Session ID &  Version Number & Type Length & Stream Type \\
+		Message ID & Session ID & Version Number & Chal. Value & Sample Rate & Sample Size  \\
+		\hline
+	\end{tabular}
+	\item \hfill \\
+	\begin{tabular}{ | c | c | c |}
+		\hline
+		4 bytes & 1 bit & 1 bit \\
+		\hline
+		Num. of Channels   & Signed Flag  & Big-Endian Flag \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
@@ -156,18 +246,29 @@ This paper defines a media streaming protocol that allows a properly implemented
 		Version Number & byte & Identifies the protocol version to be used in this connection.
 						\newline 1 = Version 1.0 \\
 		\hline
-        Type Length & byte & Contains the value of $n$, the length of the Stream Type field. \\
-        \hline
-        Stream Type & variable & An ASCII-encoded string describing the encoding format and data type of the stream. \\
-        \hline
+		Challenge Value & int & Contains the server-generated challenge value.  \\
+		\hline
+		Sample Rate & float & Contains the audio file's sampling rate (samples per second).  \\
+		\hline
+		Sample Size & int & Contains the number of bits in each sample.  \\
+		\hline
+		Channels & int & Contains the number of channels in the audio stream.  \\
+		\hline
+		Signed Flag & bool & Indicates whether the audio data is signed. 
+						\newline 0 = Unsigned
+						\newline 1 = Signed \\
+		\hline
+		Big-Endian Flag & bool & Indicates whether bytes of audio data are in big-endian order. 
+						\newline 0 = Little-endian
+						\newline 1 = Big-endian \\
+		\hline
 	\end{tabular}
 	\end{description}
-\subsubsection{ChallengeMessage}
+\subsubsection{RechallengeMessage}
 	\begin{description}
 	\item[Description] \hfill \\
-		This message is sent from the server to the client to begin the authentication process.  
-		The message contains a challenge value to be generated by the server.  This message marks 
-		the transition from the Connecting state to the Authentication state. 	
+		This message is sent from the server to the client to indicate an invalid Challenge Response 
+		causing an authentication failure.  The message contains a new challenge value generated by the server.
 	\item[Message Format] \hfill \\
 	\begin{tabular}{ | c | c | c | }
 		\hline
@@ -186,40 +287,42 @@ This paper defines a media streaming protocol that allows a properly implemented
 		\hline
 		Session ID & byte & Contains the Session ID number pertaining to this message. \\
 		\hline
-		Challenge Value & int & Contains a randomly-generated challenge value. \\
+		Challenge Value & int & Contains the server-generated challenge value. \\
 		\hline
 	\end{tabular}
 	\end{description}
-\subsubsection{ChallengeResultMessage}
-	\begin{description}
-	\item[Description] \hfill \\
-		This message is sent from the server to the client to complete the authentication process.  
-		Upon receiving the ChallengeResponseMessage, the server compares the result received from 
-		the client to its own result, and informs the client of success or failure.
-	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | }
-		\hline
-		1 byte & 1 byte & 1 byte \\
-		\hline
-		Message ID & Session ID &  Challenge Result \\
-		\hline
-	\end{tabular}
-	\item[Message Field Definitions] \hfill \\
-	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
-		\hline
-		Field Name & Data Type & Definition \\
-		\hline
-		Message ID & byte & Contains the Message ID number. 
-					\newline Always set to 5 for this message. \\
-		\hline
-		Session ID & byte & Contains the Session ID number pertaining to this message. \\
-		\hline
-		Challenge Result & byte & Contains the result of the challenge process.
-						\newline 0 = Failure 
-						\newline 1 = Success \\
-		\hline
-	\end{tabular}
-	\end{description}
+
+%\subsubsection{ChallengeResultMessage}
+%	\begin{description}
+%	\item[Description] \hfill \\
+%		This message is sent from the server to the client to complete the authentication process.  
+%		Upon receiving the ChallengeResponseMessage, the server compares the result received from 
+%		the client to its own result, and informs the client of success or failure.
+%	\item[Message Format] \hfill \\
+%	\begin{tabular}{ | c | c | c | }
+%		\hline
+%		1 byte & 1 byte & 1 byte \\
+%		\hline
+%		Message ID & Session ID &  Challenge Result \\
+%		\hline
+%	\end{tabular}
+%	\item[Message Field Definitions] \hfill \\
+%	\begin{tabular}{ | p{3cm} | p{1.5cm} | p{8cm} | }
+%		\hline
+%		Field Name & Data Type & Definition \\
+%		\hline
+%		Message ID & byte & Contains the Message ID number. 
+%					\newline Always set to 8 for this message. \\
+%		\hline
+%		Session ID & byte & Contains the Session ID number pertaining to this message. \\
+%		\hline
+%		Challenge Result & byte & Contains the result of the challenge process.
+%						\newline 0 = Failure 
+%						\newline 1 = Success \\
+%		\hline
+%	\end{tabular}
+%	\end{description}
+
 \subsubsection{AuthenticationErrorMessage}
 	\begin{description}
 	\item[Description] \hfill \\
@@ -255,11 +358,19 @@ This paper defines a media streaming protocol that allows a properly implemented
 		These messages are sent while the protocol is in the streaming state. They contain the 
 		actual data that is being streamed. The message consists of a message ID identifying it as a data message, a session ID identifying the session, a four-byte data length field, and a variable $n$-byte data chunk.
 	\item[Message Format] \hfill \\
-	\begin{tabular}{ | c | c | c | c | c | c |c | }
+	\begin{tabular}{ | c | c | c | c | c | }
 		\hline
-		1 byte & 1 byte & 1 byte & 4 bytes & $n$ bytes & 4 bytes & $m$ bytes \\
+		1 byte & 1 byte & 1 byte & 4 bytes & $n$ bytes \\
 		\hline
-		Message ID & Session ID & Sequence Number & Data Length & Encoded Data & CRC length & CRC \\
+		Message ID & Session ID & Sequence Number & Data Length & Encoded Data \\
+		\hline
+	\end{tabular}
+	\item \hfill \\
+	\begin{tabular}{ | c | c | }
+		\hline
+		4 bytes & $m$ bytes \\
+		\hline
+		CRC length & CRC \\
 		\hline
 	\end{tabular}
 	\item[Message Field Definitions] \hfill \\
@@ -280,7 +391,7 @@ This paper defines a media streaming protocol that allows a properly implemented
         \hline
         CRC Length & int & The length of the CRC. \\
         \hline
-        CRC & byte & Cyclic redundancy check for the packet. \\
+        CRC & byte & Cyclic redundancy check for the data. \\
         \hline
 	\end{tabular}
 	\end{description}
@@ -317,22 +428,24 @@ This paper defines a media streaming protocol that allows a properly implemented
 \section{DFA}
 \begin{tikzpicture}[->,>=stealth',shorten >=1pt,auto,bend angle=75,inner sep=1pt, every state/.style={draw=blue!50,very thick,fill=blue!20, font=\footnotesize}]
 
-\foreach \name/\text/\angle in {1/disconnected/180, 2/connecting/120, 3/connected/60, 4/authenticating/0, 5/authenticated/300, 6/streaming/240}
+\foreach \name/\text/\angle in {1/disconnected/180, 2/connecting/90,  3/authenticating/0, 4/streaming/270}
 \node[state,xshift=10cm,yshift=2cm](\name) at (\angle:5cm) {\text};
 
 \path 
-	(1) edge				node {session req} 	(2)
-	(2) edge				node {session msg} 	(3)
-	      edge [bend right]		node[swap] {timeout} 		(1)	
-	(3) edge				node {chlg}		(4)
-	      edge				node {timeout}		(1)	
-	(4) edge 				node {chlg success}	(5)
-	      edge [loop right]		node {chlg fail}          (4)
-	      edge 				node {auth err}          (1)
-	(5) edge				node {stream}		(6)
-	(6) edge				node {disc}		(1)
-	      edge [loop below]	node {throttle}		(6)
-	      edge [bend left]		node {stream err}	(1)	      	
+	(1) edge				node {session req} 		(2)
+	(2) edge				node {session msg} 		(3)
+	      edge [loop right]		node {timeout} 			(2)
+	      edge [loop above]	node{session req}		(2)	
+	(3)	
+	      edge [loop right]		node {rechallenge}          	(4)
+	      edge 				node {auth err}          		(1)
+	      edge				node {stream}			(4)
+%	      edge [bend left]		node {chlg result}		(4)
+	(4) edge				node {disconnect}		(1)
+	      edge [loop below]	node {throttle}			(4)
+	      edge [loop above] node{stream}			(4)
+	      edge [loop right] node{pause}			(4)
+	      edge [bend left]		node {stream err}		(1)	      	
 	
 	;
 
@@ -344,14 +457,16 @@ This paper defines a media streaming protocol that allows a properly implemented
 % Throttle = 7
 %SessionMessage = 2
 %ChallengeMessage = 3
-% ChallengeResult = 5
+% ChallengeResult = 8
 %auth err = 9
 %stream = 5
+%Pause = 11
 
 \section{Extensibility}
 Protocol version information is included in connection messages so that the protocol version used by both sides can be established during the configuration phase.  This allows future improvements to the protocol to be implemented without rendering existing client applications unusable. In addition to this, the type of media and encoding that the stream uses are sent to the client as an ASCII-encoded string. This allows clients and servers to implement additional encodings as they are developed without updates to the protocol.
 
 \section{Security}
+\label{sec:security}
 This protocol uses a CHAP-like handshaking protocol for authentication of clients.  After the connection has been established, the server sends a challenge message to the client.  Both the client and server pass a password through a pre-determined hash function, and the server checks the results and informs the client of success or failure.
 
 \section{Reliability}

@@ -1,17 +1,20 @@
 package edu.drexel.group5;
 
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
+import java.io.File;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import javax.sound.sampled.*;
 
 /**
  *
@@ -47,26 +50,26 @@ public class PacketFactory {
 	}
 
 	/**
-	 *
+	 * Creates a SessionMessage suitable for sending to the client from the
+	 * server after the server receives the SessionRequest.
 	 * @param sessionId the id of the session.
 	 * @param version the protocol version.
 	 * @param format the String name of the stream format. Must be less than 256 characters.
 	 * @param challengeValue the random int that will be hashed with the shared secret by the client.
 	 * @return
 	 */
-	public DatagramPacket createSessionMessage(byte sessionId, byte version, String format, int challengeValue) throws IOException {
-		if (format.length() > 256) {
-			throw new IllegalArgumentException("Format string must be less than 256 characters!");
-		}
-		byte[] formatBytes = format.getBytes(Charset.forName("US-ASCII"));
+	public DatagramPacket createSessionMessage(byte sessionId, byte version, int challengeValue, AudioFormat audioFormat) throws IOException {
 		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
-		final ObjectOutputStream out = new ObjectOutputStream(bytesOut);
+		final DataOutputStream out = new DataOutputStream(bytesOut);
 		out.writeByte(MessageType.SESSION.getMessageId());
 		out.writeByte(sessionId);
 		out.writeByte(version);
-		out.writeByte(formatBytes.length);
-		out.write(formatBytes);
 		out.writeInt(challengeValue);
+		out.writeFloat(audioFormat.getSampleRate());
+		out.writeInt(audioFormat.getSampleSizeInBits());
+		out.writeInt(audioFormat.getChannels());
+		out.writeBoolean(audioFormat.getEncoding() == AudioFormat.Encoding.PCM_SIGNED ? true : false);
+		out.writeBoolean(audioFormat.isBigEndian());
 		out.flush();
 		final byte[] data = bytesOut.toByteArray();
 		out.close();
@@ -83,25 +86,27 @@ public class PacketFactory {
 	 * @throws IOException
 	 */
 	public DatagramPacket createChallengeResponse(byte sessionId, int challengeValue, String secret) throws IOException {
-		final ByteArrayOutputStream output = new ByteArrayOutputStream();
-		output.write(MessageType.CHALLENGE_RESPONSE.getMessageId());
-		output.write(sessionId);
+		final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+		final DataOutputStream output = new DataOutputStream(new BufferedOutputStream(bytes));
+		output.writeByte(MessageType.CHALLENGE_RESPONSE.getMessageId());
+		output.writeByte(sessionId);
 		messageDigest.update(intToByteArray(challengeValue));
 		messageDigest.update(secret.getBytes("US-ASCII"));
 		final byte[] digest = messageDigest.digest();
-		output.write(digest.length);
-		output.write(digest);
+		output.writeInt(digest.length);
+		output.write(digest, 0, digest.length);
 		output.flush();
-		final byte[] data = output.toByteArray();
+		final byte[] data = bytes.toByteArray();
 		output.close();
 		return new DatagramPacket(data, data.length, destination);
 	}
 
-	public DatagramPacket createChallengeResult(byte sessionId, byte result) throws SocketException {
-		final byte[] data = new byte[3];
-		data[0] = MessageType.CHALLENGE_RESULT.getMessageId();
-		data[1] = sessionId;
-		data[2] = result;
+	public DatagramPacket createRechallengeMessage(byte sessionId, int challengeValue) throws SocketException {
+		final byte[] data = new byte[6]; //1 for message type, 1 for sessionId 4 fo challengeValue
+		final ByteBuffer buffer = ByteBuffer.wrap(data);
+		buffer.put(MessageType.RECHALLENGE.getMessageId());
+		buffer.put(sessionId);
+		buffer.putInt(challengeValue);
 		return new DatagramPacket(data, data.length, destination);
 	}
 
@@ -138,17 +143,34 @@ public class PacketFactory {
 		return new DatagramPacket(data, data.length, destination);
 	}
 
-	public DatagramPacket createStreamMessage(byte sessionId, byte sequenceNumber, byte[] data, byte[] crc) throws SocketException, IOException {
+	public DatagramPacket createStreamMessage(byte sessionId, int sequenceNumber, byte[] data, byte[] crc) throws SocketException, IOException {
 		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
 		final DataOutputStream outputStream = new DataOutputStream(bytesOut);
-		outputStream.write(MessageType.STREAM.getMessageId());
-		outputStream.write(sessionId);
-		outputStream.write(sequenceNumber);
+		outputStream.writeByte(MessageType.STREAM.getMessageId());
+		outputStream.writeByte(sessionId);
+		outputStream.writeInt(sequenceNumber);
 		outputStream.writeInt(data.length);
 		outputStream.write(data, 0, data.length);
 		outputStream.writeInt(crc.length);
 		outputStream.write(crc, 0, crc.length);
 		final byte[] outputData = bytesOut.toByteArray();
 		return new DatagramPacket(outputData, outputData.length, destination);
+	}
+	
+	public DatagramPacket createPauseMessage(byte sessionId, boolean isPaused) throws SocketException {
+		final byte[] data = new byte[]{MessageType.PAUSE.getMessageId(), sessionId, isPaused ? (byte)1 : (byte)0};		
+		return new DatagramPacket(data, data.length, destination);
+	}
+	
+	public DatagramPacket createThrottleMessage(byte sessionId, int rateDiff) throws SocketException, IOException {
+		final ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+		final DataOutputStream output = new DataOutputStream(new BufferedOutputStream(bytes));
+		output.writeByte(MessageType.THROTTLE.getMessageId());
+		output.writeByte(sessionId);
+		output.writeInt(rateDiff);
+		output.flush();
+		final byte[] data = bytes.toByteArray();
+		output.close();
+		return new DatagramPacket(data, data.length, destination);
 	}
 }
