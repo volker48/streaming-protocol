@@ -74,7 +74,7 @@ public class StreamSession implements Runnable {
 		this.sessionId = sessionId;
 		this.sessionRequest = sessionRequest;
 		this.format = format;
-		state = ProtocolState.CONNECTING;
+		state = ProtocolState.DISCONNECTED;
 		factory = new PacketFactory(sessionRequest.getSocketAddress());
 	}
 
@@ -100,6 +100,11 @@ public class StreamSession implements Runnable {
 	}
 
 	private void handleSessionRequest(DatagramPacket packet) {
+		logger.log(Level.INFO, "Processing SessionRequest message...");
+		if (state != edu.drexel.group5.common.ProtocolState.DISCONNECTED) {
+			logger.log(Level.WARNING, "Received SESSION_REQUEST - not in DISCONNECTED state");
+			return;
+		}		
 		logger.log(Level.INFO, "Performing session handshake...");
 		final int client = packet.getData()[1];
 		logger.log(Level.INFO, "Client version is: {0}", client);
@@ -213,7 +218,7 @@ public class StreamSession implements Runnable {
 	}
 
 	private void handlePacketWhileStreaming(DatagramPacket packet) {
-		logger.log(Level.INFO, "Received packet while streaming!"); //TODO: Implement
+		logger.log(Level.INFO, "Received packet while streaming!");
 		byte[] data = packet.getData();
 		MessageType messageType = MessageType.getMessageTypeFromId(data[0]);
 		switch (messageType) {
@@ -228,14 +233,24 @@ public class StreamSession implements Runnable {
 	}
 
 	private void handlePauseMessage(DatagramPacket packet) {
+		logger.log(Level.FINE, "Received Pause message...");
+		if (state != edu.drexel.group5.common.ProtocolState.STREAMING) {
+			logger.log(Level.WARNING, "Received PAUSE - not in STREAMING state");
+			return;
+		}	
 		byte[] data = packet.getData();
 		byte inputPause = data[2];
 		logger.log(Level.INFO, "Processing Pause Message, sessionId = {0}, paused? = {1}", new Object[]{data[1], data[2]});
 		isPaused = (inputPause == 1);
-		logger.log(Level.INFO, "New paused status = ", inputPause);
+		logger.log(Level.INFO, "New paused status = " + String.valueOf(isPaused));
 	}
 
 	private void handleThrottleMessage(DatagramPacket packet) {
+		logger.log(Level.FINE, "Received Throttle message...");
+		if (state != edu.drexel.group5.common.ProtocolState.STREAMING) {
+			logger.log(Level.WARNING, "Received THROTTLE - not in STREAMING state");
+			return;
+		}	
 		byte[] data = packet.getData();
 		final DataInputStream input = new DataInputStream(new BufferedInputStream(new ByteArrayInputStream(data)));
 		try {
