@@ -73,7 +73,7 @@ public class Client extends Thread {
 	}
 
 	public void acceptSession(byte[] buffer) throws IOException {
-		logger.log(Level.INFO, "Received SESSION Message");
+		logger.log(Level.FINE, "Received SESSION Message");
 		if (state != edu.drexel.group5.common.ProtocolState.CONNECTING) {
 			logger.log(Level.WARNING, "Received SESSION - not in CONNECTING state");
 			return;
