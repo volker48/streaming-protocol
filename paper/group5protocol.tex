@@ -4,6 +4,7 @@
 \usepackage{amsmath}
 \usepackage{amsfonts}
 \usepackage{amssymb}
+\usepackage{url}
 \usepackage{tikz}
 \usepackage{pgf}
 \usetikzlibrary{arrows,automata}
@@ -533,7 +534,9 @@ Streaming media transmission requires careful monitoring of traffic to maintain 
 \label{sec:autodiscovery}
 The client will auto discover local servers by sending out a HERP message to the broadcast address. It will then wait 1 second and if it does not hear a reply it will send out another broadcast. It will try up to 5
 times before giving up. When the server receives the HERP message it creates a DERP message that it send back to the address and port that the HERP message was sent from. The client then utilizes the information in the
-HERP message to begin the protocol.
+HERP message to begin the protocol. The auto discovery implementation listens on port 65530,
+which is different than the standard server port of 32456. This was purely an implementation 
+choice to keep the discovery isolated from the main code in case it caused any issues. 
 
 This approach should work as long as the client and server are on the same subnet. It is possible that it will work if they are not, but that would be dependent on whether or not the router on the network will route a
 a UDP packet sent to the broadcast address 255.255.255.255.
@@ -560,8 +563,19 @@ The SessionMessage has been updated to contain separate fields for all parameter
 \subsection{Pause Feature}
 Pause is a new feature that has been added since the original design.  The user can enter 'p' to send a Pause message to the server indicating that it should temporarily pause streaming.  Pressing 'p' again sends another message to the server indicating Unpause.
 
+\section{Performance}
+The implementation of the protocol is only streaming uncompressed audio in the WAV file format.
+As such, the playback of the audio can become choppy if the file being streamed has a high
+sample rate and multiple channels. It would be desirable to stream a compressed file format, but
+due to time constraints we did not write any code to perform audio compression.
+
+\section{Sample Run}
+A sample run of the client can be found here \url{http://www.youtube.com/watch?v=nw3SDh7rij8}
+
 \section{Group Contribution}
 Everyone in the group contributed to this writeup. Each member contributed one or more states and messages as well as writing sections and subsections of this document. Everyone provided valuable feedback and ideas during this initial design phase of the protocol.
+
+Everyone in the group committed code to the assignment as well. It as a group effort.
 
 
 \end{document}
