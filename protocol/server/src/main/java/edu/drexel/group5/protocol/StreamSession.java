@@ -101,8 +101,10 @@ public class StreamSession implements Runnable {
 
 	private void handleSessionRequest(DatagramPacket packet) {
 		logger.log(Level.INFO, "Processing SessionRequest message...");
-		if (state != edu.drexel.group5.common.ProtocolState.DISCONNECTED) {
-			logger.log(Level.WARNING, "Received SESSION_REQUEST - not in DISCONNECTED state");
+		if (state == edu.drexel.group5.common.ProtocolState.DISCONNECTED)
+				state = edu.drexel.group5.common.ProtocolState.CONNECTING;
+		if (state != edu.drexel.group5.common.ProtocolState.CONNECTING) {
+			logger.log(Level.WARNING, "Received SESSION_REQUEST - not in CONNECTING state");
 			return;
 		}		
 		logger.log(Level.INFO, "Performing session handshake...");
