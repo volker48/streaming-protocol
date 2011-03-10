@@ -26,18 +26,21 @@ This section describes the states of the protocol, the messages expected in thos
 transitions between states.
 
 \subsection{Disconnected}
-The protocol always begins in the disconnected state. The client transitions from the disconnected
-to connecting state immediately after  sending the server a SessionRequest message. 
-The server transitions to the connecting state upon receipt of the SessionRequest message.
+The protocol always begins in the Disconnected state.  If server discovery is enabled in the client, 
+HERP/DERP messages will be exchanged as long as an available server is found on the network.
+
+The client transitions from the Disconnected to Connecting state immediately after sending the 
+server a SessionRequest message.  The server transitions to the Connecting state upon receipt 
+of the SessionRequest message.
 
 \subsection{Connecting}
-In the connecting state, the client will wait an implementation dependent amount of time for the 
+In the Connecting state, the client will wait an implementation dependent amount of time for the 
 session message. If the client does not receive the message within the timeout it will resend
-the session request to the server. If the server is already processing a session request for a client
+the session request to the server.  If the server is already processing a session request for a client
 it should ignore subsequent requests.
 
 After the server provisions the session, it sends the client a SessionMessage. This message 
-contains the session id the client will use for subsequent communication with the server as
+contains the session id the client will use for subsequent communication with the server, as
 well as the challenge value for the CHAP authentication, which is described in more detail
 in section~\ref{sec:security}.
 
@@ -527,6 +530,7 @@ Due to the real-time nature of the protocol, it does not attempt to retransmit a
 Streaming media transmission requires careful monitoring of traffic to maintain acceptable levels of loss and to avoid network congestion. These goals are achieved through the ThrottleMessage. The client sends a ThrottleMessage to inform the server that it would like to change the server's rate of transmission to that client. If the network is under a heavy load, the client will observe that packets have been lost in transit by examining sequence numbers. When this occurs, the client will request that the server decrease its current transmission rate to avoid packet loss for other services across the network. This is necessary because UDP will not perform this operation on its own like TCP would. If the client wishes to increase the rate of transmission it may do this as well, but the server is free to ignore any request that is too high.
 
 \section{Auto Discovery}
+\label{sec:autodiscovery}
 The client will auto discover local servers by sending out a HERP message to the broadcast address. It will then wait 1 second and if it does not hear a reply it will send out another broadcast. It will try up to 5
 times before giving up. When the server receives the HERP message it creates a DERP message that it send back to the address and port that the HERP message was sent from. The client then utilizes the information in the
 HERP message to begin the protocol.
@@ -535,7 +539,26 @@ This approach should work as long as the client and server are on the same subne
 a UDP packet sent to the broadcast address 255.255.255.255.
 
 \section{Changes from Original Proposal}
+\subsection{Restructuring of DFA}
+During implementation, we discovered that two of the protocol's states were unnecessary and have removed them:
+\begin{itemize}
+\item {\bf Connected State - }Upon sending the Session message to the client, the server would transition to Connected, only to transition to Authenticating moments later after sending the first Challenge message.
+\item {\bf Authenticated State - }Upon sending the Challenge Result message to the client, the server would transition to Authenticated, only to transition to Streaming moments later after sending the first Streaming message.
+\end{itemize}
 
+\subsection{Authentication Changes}
+In the original design, upon receiving the SessionRequest message from the client, the server would respond with a SessionMessage, immediately followed by the first Challenge message.  This created a race condition whereby the client might receive the Challenge before receiving the the SessionMessage.  As a result, the SessionMessage has been modified to include the challenge value for the first challenge.  The Challenge message has been renamed Rechallenge, as it is now only used when the first challenge fails and a new challenge value must be sent to the client. 
+
+Additionally, the Challenge Result message has been removed, since the above changes have made it redundant.  In case of challenge failure, the server sends Rechallenge with a new challenge value.  In case of challenge success, the server sends the first Streaming message to signal the transition to the Streaming state.
+
+\subsection{Server Discovery}
+Two new messages (HERP and DERP) have been added to the protocol to allow the client to search for available servers without providing a specific IP address.  See section ~\ref{sec:autodiscovery} above for more information.
+
+\subsection{Audio Format Parameters}
+The SessionMessage has been updated to contain separate fields for all parameters that the client needs to properly process the audio file being streamed by the server, rather than sending all this information in a single variable-length ASCII-encoded string field.
+
+\subsection{Pause Feature}
+Pause is a new feature that has been added since the original design.  The user can enter 'p' to send a Pause message to the server indicating that it should temporarily pause streaming.  Pressing 'p' again sends another message to the server indicating Unpause.
 
 \section{Group Contribution}
 Everyone in the group contributed to this writeup. Each member contributed one or more states and messages as well as writing sections and subsections of this document. Everyone provided valuable feedback and ideas during this initial design phase of the protocol.
