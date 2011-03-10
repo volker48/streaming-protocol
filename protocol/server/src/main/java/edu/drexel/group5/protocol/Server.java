@@ -63,8 +63,6 @@ public class Server extends Thread {
 	}
 
 	public static void main(String[] args) throws IOException {
-		Handler logFileHandler = new FileHandler("server.log", 8192, 5, true);
-		Logger.getLogger("").addHandler(logFileHandler);
 		File audioFile = new File(args[0]);
 		Preconditions.checkArgument(audioFile.isFile(), "The argument for the path to the file to stream is not a file!");
 		final AudioFileFormat audioFileFormat;

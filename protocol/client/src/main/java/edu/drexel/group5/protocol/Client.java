@@ -326,8 +326,6 @@ public class Client extends Thread {
 	}
 
 	public static void main(String[] args) throws IOException {
-		Handler logFileHandler = new FileHandler("client.log", 8192, 5, true);
-		Logger.getLogger("").addHandler(logFileHandler);
 		ServerInfo info = null;
 		Client client = null;
 		if (args.length == 0) {
