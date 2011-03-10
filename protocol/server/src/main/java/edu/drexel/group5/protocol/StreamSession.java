@@ -54,7 +54,7 @@ public class StreamSession implements Runnable {
 	private boolean isPaused = false;
 	private int bytesPerMessage; // Calculated from the audio attributes and the sleep value	
 	// This variable will change to reach the desired rate of bytes/sec
-	private int sleep = 32; // in milliseconds
+	private int sleep = 25; // in milliseconds
 
 	/**
 	 *
@@ -213,7 +213,7 @@ public class StreamSession implements Runnable {
 	}
 
 	private void handlePacketWhileStreaming(DatagramPacket packet) {
-		logger.log(Level.INFO, "Received packet while streaming!"); //TODO: Implement
+		logger.log(Level.INFO, "Received packet while streaming!");
 		byte[] data = packet.getData();
 		MessageType messageType = MessageType.getMessageTypeFromId(data[0]);
 		switch (messageType) {
@@ -223,6 +223,8 @@ public class StreamSession implements Runnable {
 			case THROTTLE:
 				handleThrottleMessage(packet);
 				break;
+			case DISCONNECT:
+				handleDisconnectMessage(packet);
 		}
 
 	}
@@ -242,10 +244,20 @@ public class StreamSession implements Runnable {
 			input.skipBytes(2);
 			int inputRateDiff = input.readInt();
 			logger.log(Level.INFO, "Processing Throttle Message, sessionId = {0}, rate change (bytes/sec) = {1}", new Object[]{data[1], inputRateDiff});
-			int currentRate = (sleep / bytesPerMessage);
-			int newRate = currentRate + inputRateDiff;
-			sleep = (newRate / bytesPerMessage);
-			logger.log(Level.INFO, "New rate = {0}", newRate);
+			//1000 / sleep is roughly how many times we are transmitting per second
+			System.out.println("bytesPerMessage = " + bytesPerMessage);
+			int messagesPerSecond = (int) Math.floor(1000.0 / sleep);
+			System.out.println("messagesPerSecond = " + messagesPerSecond);
+			int currentBytesPerSecond = messagesPerSecond * bytesPerMessage;
+			System.out.println("currentBytesPerSecond = " + currentBytesPerSecond);
+			int newBytesPerSecond = currentBytesPerSecond + inputRateDiff;
+			System.out.println("newBytesPerSecond = " + newBytesPerSecond);
+			if (inputRateDiff > 0) {
+				sleep = (int) Math.floor(1000.0 /((double)newBytesPerSecond / bytesPerMessage));
+			} else {
+				sleep = (int) Math.ceil(1000.0 /((double)newBytesPerSecond / bytesPerMessage));
+			}
+			logger.log(Level.INFO, "New rate = {0}", newBytesPerSecond);
 			logger.log(Level.INFO, "New calculated sleep time (ms) = {0}", sleep);
 		} catch (IOException ex) {
 			logger.log(Level.WARNING, "Error processing throttle message.", ex);
@@ -257,6 +269,14 @@ public class StreamSession implements Runnable {
 		streamer.start();
 	}
 
+	private void handleDisconnectMessage(DatagramPacket packet) {
+		if (state != ProtocolState.STREAMING) {
+			logger.log(Level.WARNING, "Received Disconnect message, but not in the Streaming State");
+			return;
+		}
+		streamer.interrupt();
+	}
+
 	private class StreamingThread extends Thread {
 
 		//private final BufferedInputStream input;
@@ -264,6 +284,7 @@ public class StreamSession implements Runnable {
 		private int sequenceNumber = 0;
 		private final MessageDigest digest;
 		private final byte[] buffer;
+		private final BufferedInputStream bufferedInput;
 
 		public StreamingThread() {
 			logger.log(Level.INFO, "Streamer thread initialization");
@@ -271,6 +292,7 @@ public class StreamSession implements Runnable {
 				// Get the audio stream to transmit
 				File soundFile = new File(pathToFile);
 				input = AudioSystem.getAudioInputStream(soundFile);
+				bufferedInput = new BufferedInputStream(input);
 				AudioFormat format = input.getFormat();
 
 				// Logging to find out what audio file and format we are sending
@@ -298,8 +320,8 @@ public class StreamSession implements Runnable {
 			}
 			//This is the minimum number of bytes we can send per second to
 			//properly play the stream in real time. 1000 is the number of ms in a second.
-			bytesPerMessage = (format.getChannels() * format.getFrameSize()
-					* (int) format.getFrameRate()) / (1000 / sleep);
+			bytesPerMessage = (int) Math.ceil((format.getChannels() * format.getFrameSize()
+					* format.getFrameRate()) / (1000.0 / sleep));
 			if (bytesPerMessage % format.getFrameSize() != 0) {
 				bytesPerMessage++;
 			}
@@ -312,9 +334,19 @@ public class StreamSession implements Runnable {
 				if (!isPaused) {
 					int bytesRead;
 					try {
-						bytesRead = input.read(buffer, 0, bytesPerMessage);
+						bytesRead = bufferedInput.read(buffer, 0, bytesPerMessage);
 					} catch (IOException ex) {
 						throw new RuntimeException("Error during streaming!", ex);
+					}
+					byte[] crc = digest.digest(buffer);
+					try {
+						DatagramPacket streamMessage = factory.createStreamMessage(sessionId, sequenceNumber, buffer, bytesRead, crc);
+						socket.send(streamMessage);
+						sequenceNumber++;
+					} catch (SocketException ex) {
+						throw new RuntimeException("Problem creating stream message!", ex);
+					} catch (IOException ex) {
+						throw new RuntimeException("Could not send stream message!", ex);
 					}
 					if (bytesRead == -1) {
 						logger.log(Level.INFO, "End of stream reached, stream complete");
@@ -324,16 +356,6 @@ public class StreamSession implements Runnable {
 							logger.log(Level.SEVERE, "Could not close the streams!", ex);
 						}
 						return;
-					}
-					byte[] crc = digest.digest(buffer);
-					try {
-						DatagramPacket streamMessage = factory.createStreamMessage(sessionId, sequenceNumber, buffer, crc);
-						socket.send(streamMessage);
-						sequenceNumber++;
-					} catch (SocketException ex) {
-						throw new RuntimeException("Problem creating stream message!", ex);
-					} catch (IOException ex) {
-						throw new RuntimeException("Could not send stream message!", ex);
 					}
 					try {
 						Thread.sleep(sleep);
@@ -354,6 +376,11 @@ public class StreamSession implements Runnable {
 						throw new RuntimeException("Could not echo pause message!", ex);
 					}
 				}
+			}
+			try {
+				bufferedInput.close();
+			} catch (IOException ex) {
+				Logger.getLogger(StreamSession.class.getName()).log(Level.SEVERE, null, ex);
 			}
 		}
 	}

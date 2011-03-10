@@ -167,13 +167,13 @@ public class PacketFactory {
 		return new DatagramPacket(data, data.length, destination);
 	}
 
-	public DatagramPacket createStreamMessage(byte sessionId, int sequenceNumber, byte[] data, byte[] crc) throws SocketException, IOException {
+	public DatagramPacket createStreamMessage(byte sessionId, int sequenceNumber, byte[] data, int dataLength, byte[] crc) throws SocketException, IOException {
 		final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
 		final DataOutputStream outputStream = new DataOutputStream(bytesOut);
 		outputStream.writeByte(MessageType.STREAM.getMessageId());
 		outputStream.writeByte(sessionId);
 		outputStream.writeInt(sequenceNumber);
-		outputStream.writeInt(data.length);
+		outputStream.writeInt(dataLength);
 		outputStream.write(data, 0, data.length);
 		outputStream.writeInt(crc.length);
 		outputStream.write(crc, 0, crc.length);

@@ -9,14 +9,8 @@ import edu.drexel.group5.common.StringUtils;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.security.MessageDigest;
-import java.util.Random;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

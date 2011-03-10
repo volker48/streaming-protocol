@@ -54,12 +54,17 @@ public class StreamPlayer implements Runnable {
 			} catch (InterruptedException ex) {
 				logger.log(Level.INFO, "Stream player shutting down...");
 				Thread.currentThread().interrupt();
+				break;
 			}
 			// Decompose incoming stream message
 			buffer.position(1);//skip the MessageType byte
 			byte sessionIdFromServer = buffer.get();
 			int seqNum = buffer.getInt();
 			int datalen = buffer.getInt();
+			if (datalen == -1) {
+				shutdown();
+				return;
+			}
 			byte[] audio = new byte[datalen];
 			buffer.get(audio, 0, datalen);
 			int crcLength = buffer.getInt();
@@ -94,6 +99,12 @@ public class StreamPlayer implements Runnable {
 			logger.log(Level.FINEST, "Writing to audio line, available {0}", audioLine.available());
 			audioLine.write(audio, 0, datalen);
 		}
+		shutdown();
+	}
+
+	private void shutdown() {
+		audioLine.drain();
+		audioLine.close();
 	}
 
 	/**

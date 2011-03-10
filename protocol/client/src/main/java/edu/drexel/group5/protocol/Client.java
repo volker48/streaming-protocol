@@ -301,21 +301,21 @@ public class Client extends Thread {
 
 		try {
 			if (reader.ready()) {
-				char input = (char) reader.read();
-				if ('p' == Character.toLowerCase(input)) {
+				String input = reader.readLine();
+				if ("p".equals(input)) {
 					isPaused = !isPaused;
 					socket.send(packetFactory.createPauseMessage(sessionId, isPaused));
 					logger.log(Level.FINE, "Sent Pause Message");
 				}
-				if ('+' == input) {
-					socket.send(packetFactory.createThrottleMessage(sessionId, 1024)); // Increase by 1kB/sec
-					logger.log(Level.FINE, "Send Throttle Message, increased rate by 10kB/sec");
+				if ("+".equals(input)) {
+					socket.send(packetFactory.createThrottleMessage(sessionId, 2048)); // Increase by 1kB/sec
+					logger.log(Level.FINE, "Send Throttle Message, increased rate by 1kB/sec");
 				}
-				if ('-' == input) {
-					socket.send(packetFactory.createThrottleMessage(sessionId, -1024)); // Decrease by 1kB/sec
-					logger.log(Level.FINE, "Send Throttle Message, decreased rate by 10kB/sec");
+				if ("-".equals(input)) {
+					socket.send(packetFactory.createThrottleMessage(sessionId, -2048)); // Decrease by 1kB/sec
+					logger.log(Level.FINE, "Send Throttle Message, decreased rate by 1kB/sec");
 				}
-				if ('d' == Character.toLowerCase(input)) {
+				if ("d".equals(input)) {
 					socket.send(packetFactory.createDisconnectMessage(sessionId));
 					interrupt();
 				}
