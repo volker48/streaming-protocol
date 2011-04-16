@@ -522,7 +522,9 @@ Protocol version information is included in connection messages so that the prot
 
 \section{Security}
 \label{sec:security}
-This protocol uses a CHAP-like handshaking protocol for authentication of clients.  After the connection has been established, the server sends a challenge message to the client.  Both the client and server pass a password through a pre-determined hash function, and the server checks the results and informs the client of success or failure.
+This protocol uses a CHAP-like handshaking protocol for authentication of clients.  After the connection has been established, the server sends a challenge message to the client.  Both the client and server pass a password through a pre-determined hash function, and the server checks the results and informs the client of success or failure. For this implementation, the shared secret
+is hardcoded to "CS544GROUP5". This would correspond to a users password in a full blown
+application.
 
 \section{Reliability}
 Due to the real-time nature of the protocol, it does not attempt to retransmit any lost packets. It does, however, provide sequence number on all data messages in order to ignore any packets which have reached the client after a more recently sent packet. In addition to this, each data message contains a CRC for basic error checking. When an error is detected, the packet is simply dropped.
@@ -571,6 +573,17 @@ due to time constraints we did not write any code to perform audio compression.
 
 \section{Sample Run}
 A sample run of the client can be found here \url{http://www.youtube.com/watch?v=nw3SDh7rij8}
+
+\section{Robustness}
+The implementation is fairly robust against fuzzing. The client and server check the message
+type of every message and then their current state. Both will drop messages of unexpected type based on their current state. In addition, every message is tested for proper session id and is
+dropped if there is a mismatch.
+
+Something that the protocol could be vulnerable to is an adversary sending datagrams to
+the client's socket that contain almost valid protocol messages. It is possible that the client
+could receive a packet where the first byte in the data of that packet corresponds to one of the
+message ids of a valid message. However, the client will attempt to read other data from the packet
+and most likely fail, but it will then just drop that packet and should continue normal operation.
 
 \section{Group Contribution}
 Everyone in the group contributed to this writeup. Each member contributed one or more states and messages as well as writing sections and subsections of this document. Everyone provided valuable feedback and ideas during this initial design phase of the protocol.
