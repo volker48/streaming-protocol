@@ -1,2 +1,0 @@
-Since the implementation is streaming audio there is really nothing to see on the client side. As such, a video was recorded to demonstrate a run
-from the client side. It can be found here http://www.youtube.com/watch?v=nw3SDh7rij8
